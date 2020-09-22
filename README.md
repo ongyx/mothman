@@ -3,6 +3,7 @@
 ![logo](logo.png "cidercellar")
 
 Make Cydia/Sileo repos the ez way.
+
 **NOTE**: This project is still WIP and in _alpha_ stage, so don't `git blame` me if anything goes wrong!
 
 ## Features
@@ -10,6 +11,10 @@ Make Cydia/Sileo repos the ez way.
 - Pure-Python dependencies, portable
 - Automate repository management, including adding Debian packages and generating depictions for them (fields can be customised)
 - Adds `Depiction` and `SileoDepiction` keys to `Packages` file for you
+- Eazy config with `cidercellar config`
+
+## Usage
+WIP
 
 ## Depends
 - `python` - At least version 3.6.
@@ -22,4 +27,4 @@ python(3) -m pip install cidercellar
 ```
 
 ## License
-Apache 2.0: [license text here](license.txt)
+Apache 2.0: [license text here](LICENSE.txt)
