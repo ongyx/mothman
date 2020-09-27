@@ -8,7 +8,7 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 
 setup(
     name="cidercellar",
-    version="1.0.0a1",
+    version="1.0.0a2",
     author="Ong Yong Xin",
     author_email="ongyongxin2020+github@gmail.com",
     description="Cydia/Sileo repository builder and configurator",
