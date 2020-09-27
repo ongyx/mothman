@@ -2,6 +2,21 @@
 """Python module that autogenerates Cydia/Sileo depictions for Debian repos.
 """
 
+# Copyright (C) 2020 Ong Yong Xin
+# 
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import collections
 from datetime import datetime
 import json
@@ -11,12 +26,12 @@ import sys
 from typing import Any, IO, Optional, Union
 from xml.etree import ElementTree as etree
 
-# python-debian can also be used as a backend, (it originally was),
-# but pydpkg is used instead because python-debian is GPL-3 licensed.
-# (too restrictive).
-import pydpkg
+# pydpkg can also be used as a backend,
+# but python-debian is used instead because it is (mostly) pure-Python.
+import debian.deb822
+import debian.debfile
 
-
+# regexes
 RE_DEPENDS = re.compile(r"^([a-z0-9+\-\.]+)(?: \(([<>=]{1,2}) (.*)?\))?$")
 
 
@@ -323,8 +338,8 @@ def depiction_from_deb(
     if isinstance(filename, pathlib.Path):
         filename = str(filename)
 
-    package = pydpkg.Dpkg(filename)
-    return dclass(package.headers, *args, **kwargs)
+    control = debian.debfile.DebFile(filename)
+    return dclass(control, *args, **kwargs)
 
 
 if __name__ == "__main__":

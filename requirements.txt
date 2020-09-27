@@ -1,1 +1,1 @@
-pydpkg>=1.4.4
+python-debian>=0.1.37
