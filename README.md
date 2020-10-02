@@ -26,6 +26,10 @@ WIP
 python(3) -m pip install cidercellar
 ```
 
+## Build
+All my python projects now use [flit](https://pypi.org/project/flit) to build and publish.
+To build, do `flit build`.
+
 ## License
 
 GNU GPL v3.
