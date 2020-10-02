@@ -1,6 +1,6 @@
 # cidercellar
 
-![logo](logo.png "cidercellar")
+![logo](https://raw.githubusercontent.com/ongyx/cidercellar/master/logo.png "cidercellar")
 
 Make Cydia/Sileo repos the ez way.
 
