@@ -1,0 +1,19 @@
+[build-system]
+requires = ["flit_core >=2,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.metadata]
+module = "cidercellar"
+author = "Ong Yong Xin"
+author-email = "ongyongxin2020+github@gmail.com"
+home-page = "https://github.com/ongyx/cidercellar"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "Operating System :: OS Independent",
+]
+description-file = "README.md"
+requires = [
+    "python-debian>=0.1.37",
+]
+requires-python = ">=3.6"

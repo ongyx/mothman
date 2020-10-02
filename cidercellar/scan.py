@@ -33,11 +33,19 @@ import debian.debian_support
 
 # Known compression methods for Packages file mapped to module names.
 # These are (problably) the most common compression methods.
-PACKAGES_COMPRESS = {
+PACKAGES_COMPRESSION = {
     ".gz": "gzip",
     ".bz2": "bz2",
-    ".xz": "lzma"
+    ".xz": "lzma",
+    "": "io"  # no compression (transparent), so there is no extension (just 'Packages').
 }
+
+# Convinent constants for compression.
+# (for user code).
+GZIP = ".gz"
+BZIP2 = ".bz2"
+XZ = ".xz"
+CAT = ""  # like the 'cat' command, no compression
 
 
 class DebError(Exception):
@@ -68,7 +76,8 @@ def extract_packages(dir):
     """Get the Packages file from a directory.
     This searches for the Packages file with different extensions in the directory
     (Packages.bz2, Packages.gz, et al.), extracts and returns the first one it finds.
-    If not, it will fallback to just getting the normal Packages file (no compression).
+    If not, it will fallback to just getting the normal Packages file
+    (no compression).
     
     Args:
         dir (str/pathlib.Path): The path to the folder containing the Packages file.
@@ -94,9 +103,8 @@ def extract_packages(dir):
             # we'll just return the first one that exists
             return debian.deb822.Packages(f.read())
     
-    # file does not have compression, return as it is
-    with file.open() as f:
-        return debian.deb822.Packages(f.read())
+    # compression not supported
+    return None
 
 
 def compute_hash(file, bsize=8192):
@@ -133,7 +141,7 @@ def _compare_version(vers):
     nvers = []
     for v in vers:
         if v.count("/") == 1:
-            v = v.split("/", maxsplit=1)[0]
+            v = v.partition("/")[0]
             nvers.append(v)
     
     return debian.debian_support.version_compare(*nvers)
@@ -242,26 +250,31 @@ class DebianInfo(collections.abc.MutableMapping):
         return self._headers.dump()
 
 
-class DebianRepo(object):
-    """A Debian repository.
+class DebianTree(object):
+    """A tree representing a Debian repo as a Packages file.
     
     Args:
         root (str/pathlib.Path): The path to the repository.
         deb_path (str/pathlib.Path): The relative path to the directory containing
             the Debian package files.
+        deb_type (str): The type of the packages to scan for. Defaults to 'deb'.
+        arch (str): The architecture of the packages to scan for. If None, all
+            package architectures will be allowed. Defaults to None.
+        allow_multiversion (bool): Whether or not to allow multiple versions of
+            the same package to be scanned for. Defaults to True.
     
     Attributes:
         root (pathlib.Path): See Args.
         deb_path (pathlib.Path): See Args.
         root_str (str): .path, as a string.
-    
-    Raises:
-        DebError, if deb_path is invalid.
     """
     
-    def __init__(self, root, deb_path):
+    def __init__(self, root, deb_path, debtype="deb", arch=None, allow_multiversion=True):
         self.root = pathlib.Path(root).resolve().expanduser()
         self.deb_path = self.root / deb_path
+        self._debtype = debtype
+        self._arch = arch
+        self._multiversion = allow_multiversion
         self._tree = {}
     
     @property
@@ -285,20 +298,16 @@ class DebianRepo(object):
         
         self._tree[name][f"{version}/{arch}"] = debinfo
     
-    def find_debs(self, arch=None):
+    def find_debs(self):
         """Find all Debian package files in .deb_path, and add them to the tree.
-        
-        Args:
-            arch (str): The architecture of the packages to add. If None, all package
-                architectures will be allowed. Defaults to None.
         """
         
-        for debfile in self.deb_path.glob("*.deb"):
+        for debfile in self.deb_path.glob(f"*.{self._debtype}"):
             debinfo = DebianInfo(debfile)
             
             # arch check (i use arch btw).
-            if arch is not None:
-                if debinfo["Architecture"] != arch:
+            if self._arch is not None:
+                if debinfo["Architecture"] != self._arch:
                     continue
             
             # replace filename (must be relative to root).
@@ -307,14 +316,13 @@ class DebianRepo(object):
             
             self._add_deb(debinfo)
             
-    def build(self, compress_using=[], **kwargs):
+    def build(self, write_packages=True, compress_using=[CAT]):
         """Build the Packages file for this repo.
         
         Args:
             compress_using (list): Formats to compress the Packages file in.
-                Format must be present in PACKAGES_COMPRESSION.
-                Defaults to an empty list.
-            **kwargs: Passed to .find_debs.
+                Format must be one of the module-level constants GZIP, BZIP2, XZ or CAT.
+                Defaults to [CAT] (no compression and extension, plaintext).
         
         Returns:
             The Packages file content as a string.
@@ -322,12 +330,44 @@ class DebianRepo(object):
         
         paragraphs = []
         
-        self.find_debs(**kwargs)
+        if not compress_using:
+            raise DebError("no compression format(s) specified")
         
-        for package, versions in self._tree.items():
-            for version in sort_versions(versions.keys()):
+        self.find_debs()
+        
+        # iterate alphabetically
+        for package, versions in sorted(self._tree.items()):
+        
+            # need to reverse, so latest versions come first
+            # simpler than changing the quicksort function itself
+            version_names = sort_versions(versions.keys())
+            version_names.reverse()
+            
+            if not self._multiversion:
+                latest_version = version_names[0].partition("/")[0]
+                # because version name has the format 'actual_ver/arch',
+                # there may be multiple archs for each version.
+                # (Hence the .startswith().)
+                version_names = [
+                    v for v in version_names if v.startswith(latest_version)
+                ]
+            
+            for version in version_names:
                 debinfo = versions[version]
                 paragraphs.append(str(debinfo))
         
         paragraphs.append("")
-        return "\n".join(paragraphs)
+        
+        packages_text = "\n".join(paragraphs)
+        packages_path = self.root / "Packages"
+        
+        for format in compress_using:
+            compression = lazy_import(PACKAGES_COMPRESSION[format])
+            
+            with compression.open(
+                packages_path.with_suffix(format),
+                mode="wt"
+            ) as f:
+                f.write(packages_text)
+        
+        return packages_text
