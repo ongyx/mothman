@@ -38,11 +38,7 @@ Path = Union[str, pathlib.Path]
 
 # Known compression methods for Packages file mapped to module names.
 # These are (problably) the most common compression methods.
-PACKAGES_COMPRESSION = {
-    ".gz": "gzip",
-    ".bz2": "bz2",
-    ".xz": "lzma"
-}
+PACKAGES_COMPRESSION = {".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
 
 # Convinent constants for compression.
 GZIP = ".gz"
@@ -54,7 +50,7 @@ HASHES = {
     "MD5Sum": hashlib.md5,
     "SHA1": hashlib.sha1,
     "SHA256": hashlib.sha256,
-    "SHA512": hashlib.sha512
+    "SHA512": hashlib.sha512,
 }
 
 
@@ -143,10 +139,10 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
 
 
 def _compare_version(v1: str, v2: str) -> int:
-    
+
     if v1.count("/") == 1:
         v1 = v1.partition("/")[0]
-    
+
     if v2.count("/") == 1:
         v2 = v2.partition("/")[0]
 
@@ -303,9 +299,9 @@ class DebianTree(object):
 
         with (self.root / "Release").open() as f:
             self._release = debian.deb822.Release(f)
-        
+
         # remove any hashes
-        for hash in :
+        for hash in HASHES:
             if hash in self._release:
                 # erase existing hashes of Packages file, will be added back in on build
                 self._release[hash] = []
@@ -397,10 +393,16 @@ class DebianTree(object):
 
             with compression.open(packages_path, mode="wt") as f:
                 f.write(packages_text)
-            
+
             # add hashes
             for name, digest in compute_hash(packages_path).items():
-                self._release[name].append({name.lower(): digest, "size": packages_path.stat().st_size, "name": packages_path.name})
+                self._release[name].append(
+                    {
+                        name.lower(): digest,
+                        "size": packages_path.stat().st_size,
+                        "name": packages_path.name,
+                    }
+                )
 
         with open("Release", mode="w") as f:
             f.write(str(self._release))
