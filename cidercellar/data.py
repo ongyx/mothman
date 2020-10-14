@@ -20,6 +20,3 @@ IGNORED = [
     "assets/repo/Screenshots/screenshot2.png",
     "assets/repo/Banners/RepoHeader.png",
 ]
-
-DATA = """
-"""

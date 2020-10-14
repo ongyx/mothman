@@ -41,15 +41,21 @@ Path = Union[str, pathlib.Path]
 PACKAGES_COMPRESSION = {
     ".gz": "gzip",
     ".bz2": "bz2",
-    ".xz": "lzma",
-    "": "io",  # no compression (transparent), so there is no extension (just 'Packages').
+    ".xz": "lzma"
 }
 
 # Convinent constants for compression.
 GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
-CAT = ""  # like the 'cat' command, no compression
+
+# Standard hashes for checksums.
+HASHES = {
+    "MD5Sum": hashlib.md5,
+    "SHA1": hashlib.sha1,
+    "SHA256": hashlib.sha256,
+    "SHA512": hashlib.sha512
+}
 
 
 class DebError(Exception):
@@ -105,14 +111,14 @@ def extract_packages(dir: Path) -> debian.deb822.Packages:
 
         with compressor.open(str(actual_file), mode="rt") as f:
             # we'll just return the first one that exists
-            return debian.deb822.Packages(f.read())
+            return debian.deb822.Packages(f)
 
     # compression not supported
     return None
 
 
-def compute_hash(file: Path, bsize: int = 8192) -> dict:
-    """Compute the MD5, SHA1 and SHA256 hashes of a file.
+def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
+    """Compute the MD5, SHA1, SHA256 and SHA512 hashes of a file.
 
     Args:
         file: The path to the file.
@@ -122,12 +128,7 @@ def compute_hash(file: Path, bsize: int = 8192) -> dict:
         A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings, mapped to their hashlib names.
     """
 
-    hashes = {
-        "MD5sum": hashlib.md5(),
-        "SHA1": hashlib.sha1(),
-        "SHA256": hashlib.sha256(),
-        "SHA512": hashlib.sha512(),
-    }
+    hashes = {name: hash_class() for name, hash_class in HASHES.items()}
 
     with open(file, mode="rb") as f:
         while True:
@@ -141,14 +142,15 @@ def compute_hash(file: Path, bsize: int = 8192) -> dict:
     return {k: v.hexdigest() for k, v in hashes.items()}
 
 
-def _compare_version(vers: list) -> int:
-    nvers = []
-    for v in vers:
-        if v.count("/") == 1:
-            v = v.partition("/")[0]
-            nvers.append(v)
+def _compare_version(v1: str, v2: str) -> int:
+    
+    if v1.count("/") == 1:
+        v1 = v1.partition("/")[0]
+    
+    if v2.count("/") == 1:
+        v2 = v2.partition("/")[0]
 
-    return debian.debian_support.version_compare(*nvers)
+    return debian.debian_support.version_compare(v1, v2)
 
 
 def sort_versions(versions: list) -> list:
@@ -233,6 +235,9 @@ class DebianInfo(collections.abc.MutableMapping):
         for hash, digest in self.hashinfo.items():
             self._headers[hash] = digest
 
+    def __getattr__(self, name):
+        return self._headers[name]
+
     # dict methods
     def __getitem__(self, key):
         return self._headers[key]
@@ -295,6 +300,16 @@ class DebianTree(object):
     ) -> None:
         self.root = pathlib.Path(root).resolve().expanduser()
         self.deb_path = self.root / deb_path
+
+        with (self.root / "Release").open() as f:
+            self._release = debian.deb822.Release(f)
+        
+        # remove any hashes
+        for hash in :
+            if hash in self._release:
+                # erase existing hashes of Packages file, will be added back in on build
+                self._release[hash] = []
+
         self._debtype = debtype
         self._arch = arch
         self._multiversion = allow_multiversion
@@ -347,13 +362,13 @@ class DebianTree(object):
         for v in version_names:
             yield versions[v]
 
-    def build(self, compress_using: list = [CAT]) -> str:
-        """Build the Packages file for this repo.
+    def build(self, compress_using: list = [GZIP]) -> str:
+        """Build the Packages/Release file for this repo.
 
         Args:
             compress_using: Formats to compress the Packages file in.
-                Format must be one of the module-level constants GZIP, BZIP2, XZ or CAT.
-                Defaults to [CAT] (no compression and extension, plaintext).
+                Format must be one of the module-level constants GZIP, BZIP2, or XZ.
+                Defaults to [GZIP] (.gz compression).
 
         Returns:
             The Packages file content as a string.
@@ -378,8 +393,16 @@ class DebianTree(object):
 
         for format in compress_using:
             compression = lazy_import(PACKAGES_COMPRESSION[format])
+            packages_path = packages_path.with_suffix(format)
 
-            with compression.open(packages_path.with_suffix(format), mode="wt") as f:
+            with compression.open(packages_path, mode="wt") as f:
                 f.write(packages_text)
+            
+            # add hashes
+            for name, digest in compute_hash(packages_path).items():
+                self._release[name].append({name.lower(): digest, "size": packages_path.stat().st_size, "name": packages_path.name})
+
+        with open("Release", mode="w") as f:
+            f.write(str(self._release))
 
         return packages_text
