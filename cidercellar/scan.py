@@ -1,25 +1,16 @@
 # coding: utf8
 """scan.py: Utilites to scan for Debian packages in a folder.
-Forked by ongyx from the original dpkg-scanpackages.py to use python-debian as the backend.
 """
 
-import collections
-import collections.abc
 import email
 import email.message
-import glob
-import hashlib
 import importlib
-import os
 import pathlib
 import sys
 from types import ModuleType
 from typing import Generator, Union
 
-from cidercellar import pydpkg
-import debian.deb822
-import debian.debfile
-import debian.debian_support
+from . import pydpkg
 
 # Type hints
 Path = Union[str, pathlib.Path]
@@ -33,17 +24,16 @@ GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
 
-# Standard hashes for checksums.
-HASHES = {
-    "MD5Sum": hashlib.md5,
-    "SHA1": hashlib.sha1,
-    "SHA256": hashlib.sha256,
-    "SHA512": hashlib.sha512,
-}
-
 
 class DebError(Exception):
     pass
+
+
+def _actual(name: str) -> str:
+    name = name.upper()
+    if name == "MD5":
+        name += "Sum"
+    return name
 
 
 def lazy_import(module_name: str) -> ModuleType:
@@ -109,10 +99,11 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
         bsize: How many bytes to digest at a time. Defaults to 8192 (128 * 64).
 
     Returns:
-        A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings, mapped to their hashlib names.
+        A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings,
+            mapped to their hashlib names.
     """
 
-    hashes = {name: hash_class() for name, hash_class in HASHES.items()}
+    hashes = {name: hash_class() for name, hash_class in pydpkg.HASHES.items()}
 
     with open(file, mode="rb") as f:
         while True:
@@ -123,10 +114,10 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
             for _, hash in hashes.items():
                 hash.update(buffer)
 
-    return {k: v.hexdigest() for k, v in hashes.items()}
+    return {_actual(k): v.hexdigest() for k, v in hashes.items()}
 
 
-def _compare_version(v1: str, v2: str) -> int:
+def _compare_versions(v1: str, v2: str) -> int:
 
     if v1.count("/") == 1:
         v1 = v1.partition("/")[0]
@@ -157,7 +148,7 @@ def sort_versions(versions: list) -> list:
         pivot = versions[0]
 
         for version in versions:
-            cmp = _compare_version(version, pivot)
+            cmp = _compare_versions(version, pivot)
 
             if cmp < 0:
                 less.append(version)
@@ -206,7 +197,7 @@ class DebianTree(object):
             self._release = email.message_from_file(f)
 
         # remove any hashes
-        for hash in HASHES:
+        for hash in pydpkg.HASHES:
             if hash in self._release:
                 # erase existing hashes of Packages file, will be added back in on build
                 self._release[hash] = []
@@ -243,7 +234,7 @@ class DebianTree(object):
 
             self._add_deb(debinfo)
 
-    def _build(self, package: str) -> Generator[DebianInfo, None, None]:
+    def _build(self, package: str) -> Generator[pydpkg.Dpkg, None, None]:
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
         versions = self._tree[package]
@@ -272,6 +263,7 @@ class DebianTree(object):
         """
 
         paragraphs = []
+        hashes = {_actual(h): [""] for h in pydpkg.HASHES}
 
         if not compress_using:
             raise DebError("no compression format(s) specified")
@@ -282,7 +274,12 @@ class DebianTree(object):
         for package in sorted(self._tree.items()):
             for debinfo in self._build(package):
                 msg = debinfo.message
-                paragraphs.append(str(debinfo))
+                fileinfo = debinfo.fileinfo
+                msg["Filename"] = pathlib.Path(debinfo.filename).relative_to(self.root)
+                msg["Size"] = fileinfo.pop("filesize")
+                for name, digest in debinfo.fileinfo:
+                    msg[_actual(name)] = digest
+                paragraphs.append(str(msg))
 
         paragraphs.append("")
 
@@ -296,15 +293,14 @@ class DebianTree(object):
             with compression.open(packages_path, mode="wt") as f:
                 f.write(packages_text)
 
-            # add hashes
-            for name, digest in compute_hash(packages_path).items():
-                self._release[name].append(
-                    {
-                        name.lower(): digest,
-                        "size": packages_path.stat().st_size,
-                        "name": packages_path.name,
-                    }
+            # add hash of Packages file to Release
+            for name, digest in compute_hash(packages_path):
+                hashes[name].append(
+                    f"{digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
+
+        for name, digests in hashes.items():
+            self._release[name] = "\n".join(digests)
 
         with open("Release", mode="w") as f:
             f.write(str(self._release))

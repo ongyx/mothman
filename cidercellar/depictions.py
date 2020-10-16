@@ -1,5 +1,5 @@
 # coding: utf8
-"""Python module that autogenerates Cydia/Sileo depictions for Debian repos.
+"""Generate Cydia/Sileo depictions (from deb packages) for Debian repos.
 """
 
 import collections
@@ -10,7 +10,6 @@ import sys
 from datetime import datetime
 from typing import IO, Any, Optional, Union
 from xml.etree import ElementTree as etree
-
 
 # regexes
 RE_DEPENDS = re.compile(r"^([a-z0-9+\-\.]+)(?: \(([<>=]{1,2}) (.*)?\))?$")

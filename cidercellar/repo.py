@@ -1,8 +1,9 @@
 # coding: utf8
-from typing import Generator, Tuple, Optional
+"""idk"""
 
-from . import scan
-from . import depictions
+from typing import Generator, Optional, Tuple
+
+from . import depictions, scan
 
 # constants representing depiction types
 DEPICTIONS = {"cydia": scan.CydiaDepiction, "sileo": scan.SileoDepiction}

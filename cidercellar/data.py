@@ -4,12 +4,12 @@ This module contains a compressed copy of a Cydia repository structure (specific
 Last updated 12/10/2020.
 """
 
-import io
 import base64
+import io
 import pathlib
-import tempfile
 import shutil
 import sys
+import tempfile
 import zipfile
 
 IGNORED = [

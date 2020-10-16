@@ -1,6 +1,12 @@
 # coding: utf8
 """ pydpkg: tools for inspecting dpkg archive files in python
             without any dependency on libapt
+
+This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add several 'improvements':
+
+- ran black/isort
+- use dict to update hashes (in Dpkg.fileinfo)
+- make pgpy dependency optional
 """
 
 from __future__ import absolute_import
@@ -12,11 +18,10 @@ import logging
 import lzma
 import os
 import tarfile
-
 from collections import defaultdict
-from gzip import GzipFile
-from email import message_from_string, message_from_file
+from email import message_from_file, message_from_string
 from functools import cmp_to_key
+from gzip import GzipFile
 
 # pypi imports
 import six
@@ -30,6 +35,12 @@ except ImportError:
     pgpy = None
 
 REQUIRED_HEADERS = ("package", "version", "architecture")
+HASHES = {
+    "md5": hashlib.md5,
+    "sha1": hashlib.sha1,
+    "sha256": hashlib.sha256,
+    "sha512": hashlib.sha512,
+}
 
 logging.basicConfig()
 
@@ -172,20 +183,13 @@ class Dpkg:
         :returns: dict
         """
         if self._fileinfo is None:
-            h_md5 = hashlib.md5()
-            h_sha1 = hashlib.sha1()
-            h_sha256 = hashlib.sha256()
+            hashes = {name: hcls() for name, hcls in HASHES.items()}
             with open(self.filename, "rb") as dpkg_file:
                 for chunk in iter(lambda: dpkg_file.read(128), b""):
-                    h_md5.update(chunk)
-                    h_sha1.update(chunk)
-                    h_sha256.update(chunk)
-            self._fileinfo = {
-                "md5": h_md5.hexdigest(),
-                "sha1": h_sha1.hexdigest(),
-                "sha256": h_sha256.hexdigest(),
-                "filesize": os.path.getsize(self.filename),
-            }
+                    for _, h in hashes.items():
+                        h.update(chunk)
+            self._fileinfo = {name: hobj.hexdigest() for name, hobj in hashes}
+            self._fileinfo["filesize"] = os.path.getsize(self.filename)
         return self._fileinfo
 
     @property
@@ -211,6 +215,14 @@ class Dpkg:
         :returns: string
         """
         return self.fileinfo["sha256"]
+
+    @property
+    def sha512(self):
+        """Return the sha512 hash of our target file
+
+        :returns: string
+        """
+        return self.fileinfo["sha512"]
 
     @property
     def filesize(self):
