@@ -2,23 +2,33 @@
 
 ![logo](https://raw.githubusercontent.com/ongyx/cidercellar/master/logo.png "cidercellar")
 
-Make Cydia/Sileo repos the ez way.
+Cydia/Sileo repository creation made ez.
 
-**NOTE**: This project is **still** WIP and in alpha_ stage, so don't `git blame` me if anything goes wrong!
+**NOTE**: This project is **still** WIP and in alpha stage.
+
+## Why?
+[repo.me](https://github.com/syns/repo.me), a modern Cydia repository template is awesome, and it really simplifies getting a repo up and running.
+But it becomes tedious to manually create descriptions for every single package(which is actually done twice, for both Cydia and Sileo).
+Therefore, this project aims to automate the process of generating descriptions for all packages in a repo, as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
 
 ## Features
-- No need to install `libapt`, especially on non-Debian systems
-- Pure-Python dependencies, portable
-- Automate repository management, including adding Debian packages and generating depictions for them (fields can be customised)
+- Pure-Python dependencies, portable (no more wrangling with `libapt.so` on non-Debian platforms)
+- Automate repository management, including adding Debian packages and generating depictions for them (certain fields can be customised)
 - Adds `Depiction` and `SileoDepiction` keys to `Packages` file for you
-- Eazy config with `cidercellar config`
 
-## Usage
-WIP
+## Usage (WIP)
+```
+$ mkdir example && cd example
+$ cidercellar init
+# add your packages to the 'debians' folder
+$ cidercellar pour
+$ cidercellar serve  # if you want to preview the repo
+```
 
 ## Depends
 - `python` - At least version 3.6.
-- `python-debian` - Debian package interface for Python
+- `python-dpkg` - Debian package interface (already vendorised)
+- `arpy` - Access `ar` archives
 
 ## Install
 
@@ -32,21 +42,4 @@ To build, do `flit build`.
 
 ## License
 
-GNU GPL v3.
-
-```
-Copyright (C) 2020 Ong Yong Xin
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-```
+Apache License v2.

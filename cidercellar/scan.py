@@ -3,23 +3,10 @@
 Forked by ongyx from the original dpkg-scanpackages.py to use python-debian as the backend.
 """
 
-# Copyright (C) 2018 Raymond Velasquez, 2020 Ong Yong Xin
-#
-#     This program is free software: you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation, either version 3 of the License, or
-#     (at your option) any later version.
-#
-#     This program is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 import collections
 import collections.abc
+import email
+import email.message
 import glob
 import hashlib
 import importlib
@@ -29,6 +16,7 @@ import sys
 from types import ModuleType
 from typing import Generator, Union
 
+from cidercellar import pydpkg
 import debian.deb822
 import debian.debfile
 import debian.debian_support
@@ -78,7 +66,7 @@ def lazy_import(module_name: str) -> ModuleType:
     return module
 
 
-def extract_packages(dir: Path) -> debian.deb822.Packages:
+def extract_packages(dir: Path) -> email.message.Message:
     """Get the Packages file from a directory.
     This searches for the Packages file with different extensions in the directory
     (Packages.bz2, Packages.gz, et al.), extracts and returns the first one it finds.
@@ -92,7 +80,7 @@ def extract_packages(dir: Path) -> debian.deb822.Packages:
         FileNotFoundError, if the Packages file could not be gotten.
 
     Returns:
-        The Packages file as a debian.deb822.Packages object.
+        The Packages file as a Message object.
     """
 
     file = pathlib.Path(dir) / "Packages"
@@ -107,7 +95,7 @@ def extract_packages(dir: Path) -> debian.deb822.Packages:
 
         with compressor.open(str(actual_file), mode="rt") as f:
             # we'll just return the first one that exists
-            return debian.deb822.Packages(f)
+            return email.message_from_file(f)
 
     # compression not supported
     return None
@@ -146,7 +134,7 @@ def _compare_version(v1: str, v2: str) -> int:
     if v2.count("/") == 1:
         v2 = v2.partition("/")[0]
 
-    return debian.debian_support.version_compare(v1, v2)
+    return pydpkg.Dpkg.compare_versions(v1, v2)
 
 
 def sort_versions(versions: list) -> list:
@@ -184,89 +172,6 @@ def sort_versions(versions: list) -> list:
         return versions
 
 
-class DebianInfo(collections.abc.MutableMapping):
-    """A Debian package, formatted as an entry in a Packages file.
-
-    Usage:
-    >>> debinfo = DebianInfo(path_to_deb)
-
-    Args:
-        path: The path to the Debian package.
-
-    Attributes:
-        path (pathlib.Path): See Args.
-        path_str (str): .path, as a string.
-        deb (debian.debfile.Deb822): The package's control file.
-        hashinfo (dict): The MD5/SHA hashes of the package file.
-    """
-
-    field_order = [
-        "Package",
-        "Version",
-        "Architecture",
-        "Maintainer",
-        "Depends",
-        "Conflicts",
-        "Breaks",
-        "Replaces",
-        "Filename",
-        "Size",
-        "MD5sum",
-        "SHA1",
-        "SHA256",
-        "SHA512",
-        "Section",
-        "Description",
-    ]
-
-    def __init__(self, path: Path):
-        self.path = pathlib.Path(path)
-        self.deb = debian.debfile.DebFile(self.path_str)
-
-        self._headers = self.deb.debcontrol()
-        self._headers["Filename"] = self.path_str
-        self._headers["Size"] = str(self.path.stat().st_size)
-
-        self._hashinfo = None
-        for hash, digest in self.hashinfo.items():
-            self._headers[hash] = digest
-
-    def __getattr__(self, name):
-        return self._headers[name]
-
-    # dict methods
-    def __getitem__(self, key):
-        return self._headers[key]
-
-    def __setitem__(self, key, value):
-        self._headers[key] = value
-
-    def __delitem__(self, key):
-        del self._headers[key]
-
-    def __len__(self):
-        return len(self._headers)
-
-    def __iter__(self):
-        return iter(self._headers)
-
-    # end dict methods
-
-    @property
-    def path_str(self):
-        return str(self.path)
-
-    @property
-    def hashinfo(self):
-        if self._hashinfo is None:
-            self._hashinfo = compute_hash(self.path)
-
-        return self._hashinfo
-
-    def __str__(self):
-        return self._headers.dump()
-
-
 class DebianTree(object):
     """A tree representing a Debian repo as a Packages file.
 
@@ -298,7 +203,7 @@ class DebianTree(object):
         self.deb_path = self.root / deb_path
 
         with (self.root / "Release").open() as f:
-            self._release = debian.deb822.Release(f)
+            self._release = email.message_from_file(f)
 
         # remove any hashes
         for hash in HASHES:
@@ -315,7 +220,7 @@ class DebianTree(object):
     def root_str(self):
         return str(self.root)
 
-    def _add_deb(self, debinfo: DebianInfo) -> None:
+    def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
         name, version, arch = [
             debinfo[f] for f in ("Package", "Version", "Architecture")
         ]
@@ -329,16 +234,12 @@ class DebianTree(object):
         """Find all Debian package files in .deb_path, and add them to the tree."""
 
         for debfile in self.deb_path.glob(f"*.{self._debtype}"):
-            debinfo = DebianInfo(debfile)
+            debinfo = pydpkg.Dpkg(debfile)
 
             # arch check (i use arch btw).
             if self._arch is not None:
                 if debinfo["Architecture"] != self._arch:
                     continue
-
-            # replace filename (must be relative to root).
-            rel_fname = str(self.deb_path.relative_to(self.root))
-            debinfo["Filename"] = rel_fname
 
             self._add_deb(debinfo)
 
@@ -346,7 +247,7 @@ class DebianTree(object):
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
         versions = self._tree[package]
-        version_names = sort_versions(versions).reverse()
+        version_names = versions.sort(key=_compare_versions).reverse()
 
         if not self._multiversion:
             latest_version = version_names[0].partition("/")[0]
@@ -380,6 +281,7 @@ class DebianTree(object):
         # iterate alphabetically
         for package in sorted(self._tree.items()):
             for debinfo in self._build(package):
+                msg = debinfo.message
                 paragraphs.append(str(debinfo))
 
         paragraphs.append("")

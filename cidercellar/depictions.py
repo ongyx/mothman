@@ -2,21 +2,6 @@
 """Python module that autogenerates Cydia/Sileo depictions for Debian repos.
 """
 
-# Copyright (C) 2020 Ong Yong Xin
-#
-#     This program is free software: you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation, either version 3 of the License, or
-#     (at your option) any later version.
-#
-#     This program is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 import collections
 import json
 import pathlib
@@ -26,10 +11,6 @@ from datetime import datetime
 from typing import IO, Any, Optional, Union
 from xml.etree import ElementTree as etree
 
-# pydpkg can also be used as a backend,
-# but python-debian is used instead because it is (mostly) pure-Python.
-import debian.deb822
-import debian.debfile
 
 # regexes
 RE_DEPENDS = re.compile(r"^([a-z0-9+\-\.]+)(?: \(([<>=]{1,2}) (.*)?\))?$")
@@ -317,41 +298,3 @@ class SileoDepiction(GenericDepiction):
             self.SILEO_DICT["headerImage"] = header
 
         return json.dumps(self.SILEO_DICT, indent=4)
-
-
-def depiction_from_deb(
-    filename: Union[str, pathlib.Path], *args, dclass: type = CydiaDepiction, **kwargs
-) -> str:
-    """Create a depiction for a Debian package.
-
-    Args:
-        filename: The path to the package.
-        *args: Passed to the Depiction class.
-        **kwargs: Passed to the Depiction class.
-        dclass: What depiction class to use.
-            Defaults to CydiaDepiction.
-
-    Returns:
-        The initalised class.
-    """
-
-    if isinstance(filename, pathlib.Path):
-        filename = str(filename)
-
-    control = debian.debfile.DebFile(filename)
-    return dclass(control, *args, **kwargs)
-
-
-if __name__ == "__main__":
-    try:
-        if sys.argv[1] == "cydia":
-            dclass = CydiaDepiction
-        elif sys.argv[1] == "sileo":
-            dclass = SileoDepiction
-            depiction = depiction_from_deb(sys.argv[2], dclass=dclass)
-        print(depiction.build())
-        sys.exit(0)
-
-    except IndexError:
-        print(f"usage: {__name__} <cydia/sileo> <debfile>")
-        sys.exit(1)
