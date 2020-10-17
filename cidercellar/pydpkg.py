@@ -2,11 +2,14 @@
 """ pydpkg: tools for inspecting dpkg archive files in python
             without any dependency on libapt
 
-This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add several 'improvements':
+This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add several
+'improvements' (in chronological order):
 
-- ran black/isort
 - use dict to update hashes (in Dpkg.fileinfo)
 - make pgpy dependency optional
+- ran black/isort
+- abstracted fileinfo property (from Dpkg) to module-level function
+- make Dpkg and Dsc classes inherit explicitly from 'object'
 """
 
 from __future__ import absolute_import
@@ -81,8 +84,29 @@ class DscBadSignatureError(DscError):
     """A dsc file has an invalid openpgp signature(s)"""
 
 
+def get_fileinfo(filename, chunksize: int = 128):
+    """Return a dictionary containing md5/sha1/sha256 checksums
+    and the size in bytes of our target file.
+
+    :param filename: string
+    :param chunksize: int
+    :returns: dict
+    """
+    
+    hashes = {name: hcls() for name, hcls in HASHES.items()}
+
+    with open(filename, "rb") as dpkg_file:
+        for chunk in iter(lambda: dpkg_file.read(chunksize), b""):
+            for _, h in hashes.items():
+                h.update(chunk)
+
+    hashes = {name: hobj.hexdigest() for name, hobj in hashes.items()}
+    hashes["filesize"] = os.path.getsize(self.filename)
+    return hashes
+
+
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
-class Dpkg:
+class Dpkg(object):
 
     """Class allowing import and manipulation of a debian package file."""
 
@@ -183,13 +207,7 @@ class Dpkg:
         :returns: dict
         """
         if self._fileinfo is None:
-            hashes = {name: hcls() for name, hcls in HASHES.items()}
-            with open(self.filename, "rb") as dpkg_file:
-                for chunk in iter(lambda: dpkg_file.read(128), b""):
-                    for _, h in hashes.items():
-                        h.update(chunk)
-            self._fileinfo = {name: hobj.hexdigest() for name, hobj in hashes}
-            self._fileinfo["filesize"] = os.path.getsize(self.filename)
+            self._fileinfo = get_fileinfo(self.filename)
         return self._fileinfo
 
     @property
@@ -582,7 +600,7 @@ class Dpkg:
         return cmp_to_key(Dpkg.dstringcmp)(x)
 
 
-class Dsc:
+class Dsc(object):
     """Class allowing import and manipulation of a debian source
     description (dsc) file."""
 

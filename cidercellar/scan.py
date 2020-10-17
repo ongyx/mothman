@@ -4,7 +4,9 @@
 
 import email
 import email.message
+import functools
 import importlib
+import logging
 import pathlib
 import sys
 from types import ModuleType
@@ -23,6 +25,8 @@ PACKAGES_COMPRESSION = {".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
 GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
+
+_log = logging.getLogger(__name__)
 
 
 class DebError(Exception):
@@ -48,6 +52,7 @@ def lazy_import(module_name: str) -> ModuleType:
 
     # HACK: much nicer than a long block of elifs
     # so that we don't have to keep re-importing modules.
+    _log.debug(f"lazy-importing {module_name}")
     module = sys.modules.get(module_name)
     if module is None:
         # not imported yet
@@ -83,8 +88,10 @@ def extract_packages(dir: Path) -> email.message.Message:
         if not actual_file.exists():
             continue
 
+        _log.debug(f"decompressing {actual_file}")
         with compressor.open(str(actual_file), mode="rt") as f:
             # we'll just return the first one that exists
+            _log.debug(f"parsing {actual_file}")
             return email.message_from_file(f)
 
     # compression not supported
@@ -102,6 +109,8 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
         A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings,
             mapped to their hashlib names.
     """
+    
+    _log.debug(f"computing hash for {file}")
 
     hashes = {name: hash_class() for name, hash_class in pydpkg.HASHES.items()}
 
@@ -117,7 +126,8 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
     return {_actual(k): v.hexdigest() for k, v in hashes.items()}
 
 
-def _compare_versions(v1: str, v2: str) -> int:
+def _compare_versions(versions: str) -> int:
+    v1, v2 = versions
 
     if v1.count("/") == 1:
         v1 = v1.partition("/")[0]
@@ -157,8 +167,9 @@ class DebianTree(object):
     ) -> None:
         self.root = pathlib.Path(root).resolve().expanduser()
         self.deb_path = self.root / deb_path
+        self.release_path = self.root / "Release"
 
-        with (self.root / "Release").open() as f:
+        with self.release_path.open() as f:
             self._release = email.message_from_file(f)
 
         # remove any hashes
@@ -203,7 +214,11 @@ class DebianTree(object):
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
         versions = self._tree[package]
-        version_names = versions.sort(key=_compare_versions).reverse()
+        version_names = sorted(
+            list(versions),
+            key=functools.cmp_to_key(_compare_versions)
+        )
+        version_names.reverse()
 
         if not self._multiversion:
             latest_version = version_names[0].partition("/")[0]
@@ -236,19 +251,17 @@ class DebianTree(object):
         self.find_debs()
 
         # iterate alphabetically
-        for package in sorted(self._tree.items()):
+        for package in sorted(self._tree):
             for debinfo in self._build(package):
                 msg = debinfo.message
                 fileinfo = debinfo.fileinfo
-                msg["Filename"] = pathlib.Path(debinfo.filename).relative_to(self.root)
-                msg["Size"] = fileinfo.pop("filesize")
-                for name, digest in debinfo.fileinfo:
+                msg["Filename"] = str(pathlib.Path(debinfo.filename).relative_to(self.root))
+                msg["Size"] = str(fileinfo.pop("filesize"))
+                for name, digest in fileinfo.items():
                     msg[_actual(name)] = digest
                 paragraphs.append(str(msg))
 
-        paragraphs.append("")
-
-        packages_text = "\n".join(paragraphs)
+        packages_text = "".join(paragraphs)
         packages_path = self.root / "Packages"
 
         for format in compress_using:
@@ -259,7 +272,7 @@ class DebianTree(object):
                 f.write(packages_text)
 
             # add hash of Packages file to Release
-            for name, digest in compute_hash(packages_path):
+            for name, digest in compute_hash(packages_path).items():
                 hashes[name].append(
                     f"{digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
@@ -267,7 +280,7 @@ class DebianTree(object):
         for name, digests in hashes.items():
             self._release[name] = "\n".join(digests)
 
-        with open("Release", mode="w") as f:
+        with self.release_path.open(mode="w") as f:
             f.write(str(self._release))
 
         return packages_text
