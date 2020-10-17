@@ -18,11 +18,10 @@ Therefore, this project aims to automate the process of generating descriptions 
 
 ## Usage (WIP)
 ```
-$ mkdir example && cd example
-$ cidercellar init
-# add your packages to the 'debians' folder
-$ cidercellar pour
-$ cidercellar serve  # if you want to preview the repo
+$ mkdir example && mkdir example/debs
+$ cd example
+# add your packages to debs folder
+$ python -m cidercellar.scan -m debs
 ```
 
 ## Depends

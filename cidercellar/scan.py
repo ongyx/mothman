@@ -13,6 +13,7 @@ from types import ModuleType
 from typing import Generator, Union
 
 from . import pydpkg
+from .__version__ import __version__ as ccver
 
 # Type hints
 Path = Union[str, pathlib.Path]
@@ -27,7 +28,7 @@ BZIP2 = ".bz2"
 XZ = ".xz"
 
 _log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 class DebError(Exception):
@@ -172,7 +173,10 @@ class DebianTree(object):
     ) -> None:
         _log.debug(f"initalising repo {root}")
         self.root = pathlib.Path(root).resolve().expanduser()
-        self.deb_path = self.root / deb_path
+        if str(deb_path) == ".":
+            self.deb_path = self.root
+        else:
+            self.deb_path = self.root / deb_path
         self.release_path = self.root / "Release"
 
         with self.release_path.open() as f:
@@ -196,7 +200,7 @@ class DebianTree(object):
         return str(self.root)
 
     def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
-        _log.info(f"[{debinfo.Package}] adding deb")
+        _log.debug(f"[{debinfo.Package}] adding deb")
         name, version, arch = [
             debinfo[f] for f in ("Package", "Version", "Architecture")
         ]
@@ -227,7 +231,7 @@ class DebianTree(object):
     def _build(self, package: str) -> Generator[pydpkg.Dpkg, None, None]:
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
-        _log.info(f"[{package}] sorting versions")
+        _log.debug(f"[{package}] sorting versions")
         versions = self._tree[package]
         version_names = sorted(
             list(versions), key=functools.cmp_to_key(_compare_versions)
@@ -311,3 +315,69 @@ class DebianTree(object):
             f.write(str(self._release))
 
         return packages_text
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="dpkg-scanpackages", description="dpkg-scanpackages, in Python."
+    )
+
+    parser.add_argument(
+        "-t",
+        "--type",
+        help="Scan for *.type packages, instead of *.deb.",
+        action="store",
+        default="deb",
+    )
+
+    parser.add_argument(
+        "-a",
+        "--arch",
+        help="Use a pattern consisting of *_all.deb and *_arch.deb instead of scanning for all debs.",
+        action="store",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--multiversion",
+        help="Include all found packages in the output.",
+        action="store_true",
+    )
+
+    parser.add_argument(
+        "-c",
+        "--compress",
+        help="Formats to compress the Packages file in. Defaults to '.gz, .xz'.",
+        nargs="+",
+        choices=(".gz", ".bz2", ".xz"),
+        action="store",
+        default=[".gz", ".xz"],
+    )
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        help="Show the version and exit.",
+        action="version",
+        version=ccver,
+    )
+
+    parser.add_argument(
+        "binary_path",
+        help="The folder where the binary packages are stored, relative to the current directory",
+        action="store",
+    )
+
+    args = parser.parse_args(sys.argv[1:])
+    tree = DebianTree(
+        ".",
+        args.binary_path,
+        debtype=args.type,
+        arch=args.arch,
+        allow_multiversion=args.multiversion,
+    )
+
+    tree.find_debs()
+    print(tree.build(compress_using=args.compress))
