@@ -92,7 +92,7 @@ def get_fileinfo(filename, chunksize: int = 128):
     :param chunksize: int
     :returns: dict
     """
-    
+
     hashes = {name: hcls() for name, hcls in HASHES.items()}
 
     with open(filename, "rb") as dpkg_file:
@@ -101,7 +101,7 @@ def get_fileinfo(filename, chunksize: int = 128):
                 h.update(chunk)
 
     hashes = {name: hobj.hexdigest() for name, hobj in hashes.items()}
-    hashes["filesize"] = os.path.getsize(self.filename)
+    hashes["filesize"] = os.path.getsize(filename)
     return hashes
 
 

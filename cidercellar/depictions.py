@@ -211,8 +211,6 @@ class SileoDepiction(GenericDepiction):
             The JSON as a string.
         """
 
-        views = self.SILEO_DICT["tabs"][0]["views"]
-
         # package name
         self.add_view(
             "DepictionSubheaderView",
