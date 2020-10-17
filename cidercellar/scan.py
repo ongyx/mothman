@@ -40,6 +40,10 @@ def _actual(name: str) -> str:
     return name
 
 
+def _debname(debinfo: pydpkg.Dpkg) -> str:
+    return "_".join(debinfo[field] for field in ("Package", "Version", "Architecture"))
+
+
 def lazy_import(module_name: str) -> ModuleType:
     """Import a module (if it has not been imported yet).
 
@@ -109,7 +113,7 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
         A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings,
             mapped to their hashlib names.
     """
-    
+
     _log.debug(f"computing hash for {file}")
 
     hashes = {name: hash_class() for name, hash_class in pydpkg.HASHES.items()}
@@ -165,11 +169,13 @@ class DebianTree(object):
         arch: str = None,
         allow_multiversion: bool = True,
     ) -> None:
+        _log.debug(f"initalising repo {root}")
         self.root = pathlib.Path(root).resolve().expanduser()
         self.deb_path = self.root / deb_path
         self.release_path = self.root / "Release"
 
         with self.release_path.open() as f:
+            _log.debug(f"parsing Release")
             self._release = email.message_from_file(f)
 
         # remove any hashes
@@ -182,12 +188,14 @@ class DebianTree(object):
         self._arch = arch
         self._multiversion = allow_multiversion
         self._tree = {}
+        self._found_debs = False
 
     @property
     def root_str(self):
         return str(self.root)
 
     def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
+        _log.info(f"[{debinfo.Package}] adding deb")
         name, version, arch = [
             debinfo[f] for f in ("Package", "Version", "Architecture")
         ]
@@ -198,7 +206,12 @@ class DebianTree(object):
         self._tree[name][f"{version}/{arch}"] = debinfo
 
     def find_debs(self) -> None:
-        """Find all Debian package files in .deb_path, and add them to the tree."""
+        """Find all Debian package files in .deb_path, and add them to the tree.
+        This should only be called once, subsequent calls will be ignored."""
+        if self._found_debs:
+            _log.warning(".find_debs() called more than once")
+            return
+        _log.info("finding debs")
 
         for debfile in self.deb_path.glob(f"*.{self._debtype}"):
             debinfo = pydpkg.Dpkg(debfile)
@@ -213,10 +226,10 @@ class DebianTree(object):
     def _build(self, package: str) -> Generator[pydpkg.Dpkg, None, None]:
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
+        _log.info(f"[{package}] sorting versions")
         versions = self._tree[package]
         version_names = sorted(
-            list(versions),
-            key=functools.cmp_to_key(_compare_versions)
+            list(versions), key=functools.cmp_to_key(_compare_versions)
         )
         version_names.reverse()
 
@@ -253,14 +266,22 @@ class DebianTree(object):
         # iterate alphabetically
         for package in sorted(self._tree):
             for debinfo in self._build(package):
+                debname = _debname(debinfo)
+                _log.info(f"[{debname}] adding to Packages")
                 msg = debinfo.message
                 fileinfo = debinfo.fileinfo
-                msg["Filename"] = str(pathlib.Path(debinfo.filename).relative_to(self.root))
+                msg["Filename"] = str(
+                    pathlib.Path(debinfo.filename).relative_to(self.root)
+                )
                 msg["Size"] = str(fileinfo.pop("filesize"))
                 for name, digest in fileinfo.items():
+                    _log.debug(f"[{debname}] adding {name} hash to Packages")
                     msg[_actual(name)] = digest
                 paragraphs.append(str(msg))
 
+        _log.info(
+            f"[Packages] sucessfully built (total {len(self._tree)} unique packages)"
+        )
         packages_text = "".join(paragraphs)
         packages_path = self.root / "Packages"
 
@@ -268,11 +289,15 @@ class DebianTree(object):
             compression = lazy_import(PACKAGES_COMPRESSION[format])
             packages_path = packages_path.with_suffix(format)
 
+            _log.info(
+                f"[{packages_path.name}] compressing using {compression.__name__}"
+            )
             with compression.open(packages_path, mode="wt") as f:
                 f.write(packages_text)
 
             # add hash of Packages file to Release
             for name, digest in compute_hash(packages_path).items():
+                _log.debug(f"[{packages_path.name}] adding {name} hash to Release")
                 hashes[name].append(
                     f"{digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
@@ -280,6 +305,7 @@ class DebianTree(object):
         for name, digests in hashes.items():
             self._release[name] = "\n".join(digests)
 
+        _log.info(f"[Release] building file")
         with self.release_path.open(mode="w") as f:
             f.write(str(self._release))
 
