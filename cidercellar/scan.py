@@ -27,6 +27,7 @@ BZIP2 = ".bz2"
 XZ = ".xz"
 
 _log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class DebError(Exception):
@@ -175,7 +176,7 @@ class DebianTree(object):
         self.release_path = self.root / "Release"
 
         with self.release_path.open() as f:
-            _log.debug(f"parsing Release")
+            _log.debug("parsing Release")
             self._release = email.message_from_file(f)
 
         # remove any hashes
@@ -305,7 +306,7 @@ class DebianTree(object):
         for name, digests in hashes.items():
             self._release[name] = "\n".join(digests)
 
-        _log.info(f"[Release] building file")
+        _log.info("[Release] building file")
         with self.release_path.open(mode="w") as f:
             f.write(str(self._release))
 
