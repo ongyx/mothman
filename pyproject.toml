@@ -15,6 +15,10 @@ classifiers = [
 description-file = "README.md"
 requires = [
     "arpy>=1.1.1",
-    "PGPy>=0.4.1",
 ]
 requires-python = ">=3.6"
+
+[tool.flit.metadata.requires-extra]
+dsc = [
+    "PGPy>=0.4.1",
+]

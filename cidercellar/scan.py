@@ -128,41 +128,6 @@ def _compare_versions(v1: str, v2: str) -> int:
     return pydpkg.Dpkg.compare_versions(v1, v2)
 
 
-def sort_versions(versions: list) -> list:
-    """Quicksort, for Debian package versions.
-    Sorts from earliest to latest.
-    Adapted from https://stackoverflow.com/a/18262384.
-
-    Args:
-        versions (list): The versions to sort.
-
-    Returns:
-        The sorted list (**not** sorted in-place).
-    """
-
-    less = []
-    equal = []
-    greater = []
-
-    if len(versions) > 1:
-        pivot = versions[0]
-
-        for version in versions:
-            cmp = _compare_versions(version, pivot)
-
-            if cmp < 0:
-                less.append(version)
-            elif cmp == 0:
-                equal.append(version)
-            elif cmp > 0:
-                greater.append(version)
-
-        return sort_versions(less) + equal + sort_versions(greater)
-
-    else:
-        return versions
-
-
 class DebianTree(object):
     """A tree representing a Debian repo as a Packages file.
 
