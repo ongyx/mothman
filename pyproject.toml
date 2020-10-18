@@ -15,6 +15,7 @@ classifiers = [
 description-file = "README.md"
 requires = [
     "arpy>=1.1.1",
+    "six<2.0.0",
 ]
 requires-python = ">=3.6"
 
