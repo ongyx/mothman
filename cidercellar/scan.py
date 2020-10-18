@@ -187,7 +187,7 @@ class DebianTree(object):
         for hash in pydpkg.HASHES:
             if hash in self._release:
                 # erase existing hashes of Packages file, will be added back in on build
-                self._release[hash] = []
+                del self._release[hash]
 
         self._debtype = debtype
         self._arch = arch
