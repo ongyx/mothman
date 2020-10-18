@@ -304,7 +304,7 @@ class DebianTree(object):
             for name, digest in compute_hash(packages_path).items():
                 _log.debug(f"[{packages_path.name}] adding {name} hash to Release")
                 hashes[name].append(
-                    f"{digest} {packages_path.stat().st_size} {packages_path.name}"
+                    f" {digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
 
         for name, digests in hashes.items():
