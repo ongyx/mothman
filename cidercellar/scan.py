@@ -20,9 +20,10 @@ Path = Union[str, pathlib.Path]
 
 # Known compression methods for Packages file mapped to module names.
 # These are (problably) the most common compression methods.
-PACKAGES_COMPRESSION = {".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
+PACKAGES_COMPRESSION = {"": "io", ".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
 
 # Convinent constants for compression.
+CAT = ""
 GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
@@ -58,7 +59,7 @@ def lazy_import(module_name: str) -> ModuleType:
 
     # HACK: much nicer than a long block of elifs
     # so that we don't have to keep re-importing modules.
-    _log.debug(f"lazy-importing {module_name}")
+    _log.debug("lazy-importing %s", module_name)
     module = sys.modules.get(module_name)
     if module is None:
         # not imported yet
@@ -94,10 +95,10 @@ def extract_packages(dir: Path) -> email.message.Message:
         if not actual_file.exists():
             continue
 
-        _log.debug(f"decompressing {actual_file}")
+        _log.debug("decompressing %s", actual_file)
         with compressor.open(str(actual_file), mode="rt") as f:
             # we'll just return the first one that exists
-            _log.debug(f"parsing {actual_file}")
+            _log.debug("parsing %s", actual_file)
             return email.message_from_file(f)
 
     # compression not supported
@@ -116,7 +117,7 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
             mapped to their hashlib names.
     """
 
-    _log.debug(f"computing hash for {file}")
+    _log.debug("computing hash for %s", file)
 
     hashes = {name: hash_class() for name, hash_class in pydpkg.HASHES.items()}
 
@@ -171,7 +172,7 @@ class DebianTree(object):
         arch: str = None,
         allow_multiversion: bool = True,
     ) -> None:
-        _log.debug(f"initalising repo {root}")
+        _log.debug("initalising repo %s", root)
         self.root = pathlib.Path(root).resolve().expanduser()
         if str(deb_path) == ".":
             self.deb_path = self.root
@@ -200,7 +201,7 @@ class DebianTree(object):
         return str(self.root)
 
     def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
-        _log.debug(f"[{debinfo.Package}] adding deb")
+        _log.debug("[%s] adding deb", debinfo.Package)
         name, version, arch = [
             debinfo[f] for f in ("Package", "Version", "Architecture")
         ]
@@ -231,7 +232,7 @@ class DebianTree(object):
     def _build(self, package: str) -> Generator[pydpkg.Dpkg, None, None]:
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
-        _log.debug(f"[{package}] sorting versions")
+        _log.debug("[%s] sorting versions", package)
         versions = self._tree[package]
         version_names = sorted(
             list(versions), key=functools.cmp_to_key(_compare_versions)
@@ -272,7 +273,7 @@ class DebianTree(object):
         for package in sorted(self._tree):
             for debinfo in self._build(package):
                 debname = _debname(debinfo)
-                _log.info(f"[{debname}] adding to Packages")
+                _log.info("[%s] adding to Packages", debname)
                 msg = debinfo.message
                 fileinfo = debinfo.fileinfo
                 msg["Filename"] = str(
@@ -280,12 +281,13 @@ class DebianTree(object):
                 )
                 msg["Size"] = str(fileinfo.pop("filesize"))
                 for name, digest in fileinfo.items():
-                    _log.debug(f"[{debname}] adding {name} hash to Packages")
+                    _log.debug("[%s] adding %s hash to Packages", debname, name)
                     msg[_actual(name)] = digest
                 paragraphs.append(str(msg))
 
         _log.info(
-            f"[Packages] sucessfully built (total {len(self._tree)} unique packages)"
+            "[Packages] sucessfully built (total %s unique packages)",
+            str(len(self._tree)),
         )
         packages_text = "".join(paragraphs)
         packages_path = self.root / "Packages"
@@ -295,14 +297,14 @@ class DebianTree(object):
             packages_path = packages_path.with_suffix(format)
 
             _log.info(
-                f"[{packages_path.name}] compressing using {compression.__name__}"
+                "[%s] compressing using %s", packages_path.name, compression.__name__
             )
             with compression.open(packages_path, mode="wt") as f:
                 f.write(packages_text)
 
             # add hash of Packages file to Release
             for name, digest in compute_hash(packages_path).items():
-                _log.debug(f"[{packages_path.name}] adding {name} hash to Release")
+                _log.debug("[%s] adding %s hash to Release", packages_path.name, name)
                 hashes[name].append(
                     f" {digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
@@ -349,11 +351,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c",
         "--compress",
-        help="Formats to compress the Packages file in. Defaults to '.gz, .xz'.",
+        help="Formats to compress the Packages file in (cat = no compression). Defaults to 'cat, gz'.",
         nargs="+",
-        choices=(".gz", ".bz2", ".xz"),
+        choices=("cat", "gz", "bz2", "xz"),
         action="store",
-        default=[".gz", ".xz"],
+        default=["cat", "gz"],
     )
 
     parser.add_argument(
@@ -380,4 +382,6 @@ if __name__ == "__main__":
     )
 
     tree.find_debs()
-    print(tree.build(compress_using=args.compress))
+    compressions = [(c if c != "cat" else "") for c in args.compress]
+
+    tree.build(compress_using=compressions)
