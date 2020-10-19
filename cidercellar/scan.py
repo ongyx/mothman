@@ -28,8 +28,8 @@ GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
 
-_log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+_log = logging.getLogger(__name__)
 
 
 class DebError(Exception):
@@ -306,7 +306,7 @@ class DebianTree(object):
             for name, digest in compute_hash(packages_path).items():
                 _log.debug("[%s] adding %s hash to Release", packages_path.name, name)
                 hashes[name].append(
-                    f" {digest} {packages_path.stat().st_size} {packages_path.name}"
+                    f" {digest} {packages_path.stat().st_size}  {packages_path.name}"
                 )
 
         for name, digests in hashes.items():
@@ -382,6 +382,6 @@ if __name__ == "__main__":
     )
 
     tree.find_debs()
-    compressions = [(c if c != "cat" else "") for c in args.compress]
+    compressions = [f".{c}" if c != "cat" else "" for c in args.compress]
 
     tree.build(compress_using=compressions)
