@@ -9,7 +9,6 @@ This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add severa
 - make pgpy dependency optional
 - ran black/isort
 - abstracted fileinfo property (from Dpkg) to module-level function
-- make Dpkg and Dsc classes inherit explicitly from 'object'
 """
 
 from __future__ import absolute_import
@@ -106,7 +105,7 @@ def get_fileinfo(filename, chunksize: int = 128):
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
-class Dpkg(object):
+class Dpkg:
 
     """Class allowing import and manipulation of a debian package file."""
 
@@ -600,7 +599,7 @@ class Dpkg(object):
         return cmp_to_key(Dpkg.dstringcmp)(x)
 
 
-class Dsc(object):
+class Dsc:
     """Class allowing import and manipulation of a debian source
     description (dsc) file."""
 

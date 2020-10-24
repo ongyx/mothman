@@ -45,7 +45,7 @@ def dict_to_xml(data: dict, root: str = "root") -> etree.Element:
     return root
 
 
-class GenericDepiction(object):
+class GenericDepiction:
     """A generic depiction.
     To create new representations, subclass this and override the .build() method,
     which should output the depiction representation as a string.

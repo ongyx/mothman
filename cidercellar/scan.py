@@ -1,5 +1,6 @@
 # coding: utf8
-"""scan.py: Utilites to scan for Debian packages in a folder.
+"""Utilities to scan for Debian packages in a folder.
+Forked from 'https://github.com/supermamon/dpkg-scanpackages.py'.
 """
 
 import email
@@ -18,7 +19,7 @@ from .__version__ import __version__ as ccver
 # Type hints
 Path = Union[str, pathlib.Path]
 
-# Known compression methods for Packages file mapped to module names.
+# Known compression methods for Packages file mapped to stdlib modules.
 # These are (problably) the most common compression methods.
 PACKAGES_COMPRESSION = {"": "io", ".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
 
@@ -28,8 +29,8 @@ GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
 
-logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger(__name__)
+_log.setLevel(logging.INFO)
 
 
 class DebError(Exception):
@@ -145,7 +146,10 @@ def _compare_versions(versions: str) -> int:
     return pydpkg.Dpkg.compare_versions(v1, v2)
 
 
-class DebianTree(object):
+_compare_versions_key = functools.cmp_to_key(_compare_versions)
+
+
+class DebianTree:
     """A tree representing a Debian repo as a Packages file.
 
     Args:
@@ -229,13 +233,13 @@ class DebianTree(object):
 
             self._add_deb(debinfo)
 
-    def _build(self, package: str) -> Generator[pydpkg.Dpkg, None, None]:
+    def _build(self, package: str) -> Generator[email.message.Message, None, None]:
         # need to reverse, so latest versions come first
         # simpler than changing the quicksort function itself
         _log.debug("[%s] sorting versions", package)
         versions = self._tree[package]
         version_names = sorted(
-            list(versions), key=functools.cmp_to_key(_compare_versions)
+            list(versions), key=_compare_versions_key
         )
         version_names.reverse()
 
@@ -247,14 +251,29 @@ class DebianTree(object):
             version_names = [v for v in version_names if v.startswith(latest_version)]
 
         for v in version_names:
-            yield versions[v]
+            debinfo = versions[v]
+            debname = _debname(debinfo)
+            fileinfo = debinfo.fileinfo
+            msg = debinfo.message
+            
+            _log.info("[%s] adding to Packages", debname)
+
+            msg["Filename"] = str(
+                pathlib.Path(debinfo.filename).relative_to(self.root)
+            )
+            msg["Size"] = str(fileinfo.pop("filesize"))
+            for name, digest in fileinfo.items():
+                _log.debug("[%s] adding %s hash to Packages", debname, name)
+                msg[_actual(name)] = digest
+            
+            yield msg      
 
     def build(self, compress_using: list = [GZIP]) -> str:
         """Build the Packages/Release file for this repo.
 
         Args:
             compress_using: Formats to compress the Packages file in.
-                Format must be one of the module-level constants GZIP, BZIP2, or XZ.
+                Format must be one of the module-level constants CAT, GZIP, BZIP2, or XZ.
                 Defaults to [GZIP] (.gz compression).
 
         Returns:
@@ -271,18 +290,7 @@ class DebianTree(object):
 
         # iterate alphabetically
         for package in sorted(self._tree):
-            for debinfo in self._build(package):
-                debname = _debname(debinfo)
-                _log.info("[%s] adding to Packages", debname)
-                msg = debinfo.message
-                fileinfo = debinfo.fileinfo
-                msg["Filename"] = str(
-                    pathlib.Path(debinfo.filename).relative_to(self.root)
-                )
-                msg["Size"] = str(fileinfo.pop("filesize"))
-                for name, digest in fileinfo.items():
-                    _log.debug("[%s] adding %s hash to Packages", debname, name)
-                    msg[_actual(name)] = digest
+            for msg in self._build(package):
                 paragraphs.append(str(msg))
 
         _log.info(
