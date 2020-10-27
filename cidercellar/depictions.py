@@ -8,7 +8,6 @@ import pathlib
 import re
 import sys
 from datetime import datetime
-from typing import IO, Any, Optional, Union
 from xml.etree import ElementTree as etree
 
 # regexes
