@@ -5,6 +5,7 @@ If you want a 'classical' Debian repository, see cidercellar.scan.DebianTree.
 
 import email
 import email.message
+import pathlib
 import re
 import textwrap
 from typing import Generator
@@ -15,13 +16,13 @@ from . import depictions
 # config for repo templates (paths to depictions, etc.)
 TEMPLATES = {
     "repo.me": {
-        "cydia": "depictions/web/{package}",
-        "sileo": "depictions/native/{package}",
+        "cydia": "depictions/web/{package}/info.xml",
+        "sileo": "depictions/native/{package}/depiction.json",
         "deb_path": "debians",
         "apt.conf": "assets/repo/repo.conf"
-    }
+    },
     "Reposi3": {
-        "cydia": "depictions/{package}",
+        "cydia": "depictions/{package}/info.xml",
         # Reposi3 doesn't support Sileo depictions ._.
         "deb_path": "debs"
     }
@@ -73,8 +74,7 @@ class Repository(scan.DebianTree):
         super().__init__(*args, **kwargs)
         
         self._template = TEMPLATES[template]
-        self._CYDIA = "cydia" in self._template
-        self._SILEO = "sileo" in self._template
+        self._dformats = [f for f in ("cydia", "sileo") if f in self._template]
         
         # load apt.conf (if any)
         conf = self._template.get("apt.conf")
@@ -85,11 +85,20 @@ class Repository(scan.DebianTree):
     
     def _build(self) -> Generator[email.message.Message, None, None]:
         for msg in super()._build():
-            if self._CYDIA:
-                pass
-            
-            if self._SILEO:
-                pass
+            for dformat in self._dformats:
+                self._build_depiction(dformat, msg)
+            yield msg
     
-    def _build_depiction(fmt: str) -> depictions.GenericDepiction:
-        pass
+    def _build_depiction(self, dformat: str, debinfo: email.message.Message) -> None:
+        if dformat not in self._dformats:
+            return  # don't do anything
+
+        depiction_path = self.root / self._template[dformat].format(package=debinfo["Package"])
+        (depiction_path.parent).mkdir(parents=True, exist_ok=True)
+
+        with depiction_path.open("w") as f:
+            if dformat == "cydia":
+                f.write(depictions.CydiaDepiction(debinfo).build())
+
+            elif dformat == "sileo":
+                f.write(depictions.SileoDepiction(debinfo).build())
