@@ -1,4 +1,4 @@
-# mothman
+# mothman (formerly cidercellar)
 
 ![logo](https://raw.githubusercontent.com/ongyx/mothman/master/logo.png "mothman")
 
@@ -11,6 +11,8 @@
 
 Cydia/Sileo repository creation made ez.
 Inspired by [repoman](https://github.com/JeremyGrosser/repoman).
+
+[![mothman meme](http://img.youtube.com/vi/nYq46c59n8Q/0.jpg)](https://youtube.com/watch?v=nYq46c59n8Q "mothman meme")
 
 **NOTE**: This project is **still** WIP and in alpha stage.
 
