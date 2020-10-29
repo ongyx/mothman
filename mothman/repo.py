@@ -33,6 +33,17 @@ TEMPLATES = {
         "deb_path": "debians",
         # apt config (if any)
         "apt.conf": "assets/repo/repo.conf",
+        # files/folders that should not be here
+        "exclude": [
+            "Packages*",
+            "debians/me.syns.sample.deb",
+            "depictions/web/me.syns.samplepackage",
+            "depictions/native/me.syns.samplepackage",
+            # user-generated files, should be customised by repo maintainer
+            "assets/repo/Banners/*",
+            "assets/repo/Screenshots/*",
+            "sileo-featured.json",
+        ]
     },
     "Reposi3": {
         "github": "supermamon/Reposi3",
@@ -42,6 +53,11 @@ TEMPLATES = {
         },
         # Reposi3 doesn't support Sileo depictions ._.
         "deb_path": "debs",
+        "exclude": [
+            "debs/com.supermamon.*",
+            "depictions/com.supermamon.*",
+            "Packages*",
+        ]
     },
 }
 
