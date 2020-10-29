@@ -11,10 +11,14 @@ import logging
 import pathlib
 import sys
 from types import ModuleType
-from typing import Generator, Union
+from typing import Dict, Generator, Union
 
 from . import pydpkg
 from .__version__ import __version__ as ccver
+
+__all__ = ["CAT", "GZIP", "BZIP2", "XZ", "DebianTree"]
+
+_log = logging.getLogger(__name__)
 
 # Type hints
 Path = Union[str, pathlib.Path]
@@ -28,9 +32,6 @@ CAT = ""
 GZIP = ".gz"
 BZIP2 = ".bz2"
 XZ = ".xz"
-
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.INFO)
 
 
 class DebError(Exception):
@@ -69,7 +70,7 @@ def lazy_import(module_name: str) -> ModuleType:
     return module
 
 
-def extract_packages(dir: Path) -> email.message.Message:
+def extract_packages(dir: Path) -> Union[email.message.Message, None]:
     """Get the Packages file from a directory.
     This searches for the Packages file with different extensions in the directory
     (Packages.bz2, Packages.gz, et al.), extracts and returns the first one it finds.
@@ -97,7 +98,7 @@ def extract_packages(dir: Path) -> email.message.Message:
             continue
 
         _log.debug("decompressing %s", actual_file)
-        with compressor.open(str(actual_file), mode="rt") as f:
+        with compressor.open(str(actual_file), mode="rt") as f:  # type: ignore
             # we'll just return the first one that exists
             _log.debug("parsing %s", actual_file)
             return email.message_from_file(f)
@@ -134,8 +135,7 @@ def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
     return {_actual(k): v.hexdigest() for k, v in hashes.items()}
 
 
-def _compare_versions(versions: str) -> int:
-    v1, v2 = versions
+def _compare_versions(v1, v2) -> int:
 
     if v1.count("/") == 1:
         v1 = v1.partition("/")[0]
@@ -197,7 +197,7 @@ class DebianTree:
         self._debtype = debtype
         self._arch = arch
         self._multiversion = allow_multiversion
-        self._tree = {}
+        self._tree: Dict[str, dict] = {}
         self._found_debs = False
 
     @property
@@ -238,9 +238,7 @@ class DebianTree:
         # simpler than changing the quicksort function itself
         _log.debug("[%s] sorting versions", package)
         versions = self._tree[package]
-        version_names = sorted(
-            list(versions), key=_compare_versions_key
-        )
+        version_names = sorted(list(versions), key=_compare_versions_key)
         version_names.reverse()
 
         if not self._multiversion:
@@ -255,26 +253,24 @@ class DebianTree:
             debname = _debname(debinfo)
             fileinfo = debinfo.fileinfo
             msg = debinfo.message
-            
+
             _log.info("[%s] adding to Packages", debname)
 
-            msg["Filename"] = str(
-                pathlib.Path(debinfo.filename).relative_to(self.root)
-            )
+            msg["Filename"] = str(pathlib.Path(debinfo.filename).relative_to(self.root))
             msg["Size"] = str(fileinfo.pop("filesize"))
             for name, digest in fileinfo.items():
                 _log.debug("[%s] adding %s hash to Packages", debname, name)
                 msg[_actual(name)] = digest
-            
-            yield msg      
 
-    def build(self, compress_using: list = [GZIP]) -> str:
+            yield msg
+
+    def build(self, compress_using: list = [CAT, GZIP]) -> str:
         """Build the Packages/Release file for this repo.
 
         Args:
             compress_using: Formats to compress the Packages file in.
                 Format must be one of the module-level constants CAT, GZIP, BZIP2, or XZ.
-                Defaults to [GZIP] (.gz compression).
+                Defaults to [CAT, GZIP] (plaintext and .gz compression).
 
         Returns:
             The Packages file content as a string.
@@ -307,14 +303,14 @@ class DebianTree:
             _log.info(
                 "[%s] compressing using %s", packages_path.name, compression.__name__
             )
-            with compression.open(packages_path, mode="wt") as f:
+            with compression.open(packages_path, mode="wt") as f:  # type: ignore
                 f.write(packages_text)
 
             # add hash of Packages file to Release
             for name, digest in compute_hash(packages_path).items():
                 _log.debug("[%s] adding %s hash to Release", packages_path.name, name)
                 hashes[name].append(
-                    f" {digest} {packages_path.stat().st_size}  {packages_path.name}"
+                    f" {digest} {packages_path.stat().st_size} {packages_path.name}"
                 )
 
         for name, digests in hashes.items():

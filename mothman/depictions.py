@@ -11,29 +11,29 @@ from datetime import datetime
 from xml.etree import ElementTree as etree
 
 # regexes
-RE_DEPENDS = re.compile(r"^([a-z0-9+\-\.]+)(?: \(([<>=]{1,2}) (.*)?\))?$")
+RE_DEPENDS = re.compile(r"^([a-z0-9+\-\.]+)(?: *\(([<>=]{1,2}) *(.*)?\))?$")
 
 
-def dict_to_xml(data: dict, root: str = "root") -> etree.Element:
+def dict_to_xml(data: dict, rootname: str = "root") -> etree.Element:
     """Convert a dictionary to XML.
     All objects are converted to keys, and sub-dictionaries are treated as sub-elements.
 
     Args:
         data: The dictionary.
-        root: The root element tag.
+        rootname: The root element tag.
     """
 
-    root = etree.Element(root)
+    root = etree.Element(rootname)
 
     for key, value in data.items():
 
         if isinstance(value, dict):
-            root.append(dict_to_xml(value, root=key))
+            root.append(dict_to_xml(value, rootname=key))
 
         elif isinstance(value, list):
             for item in value:
                 if isinstance(item, dict):
-                    root.append(dict_to_xml(item, root=key))
+                    root.append(dict_to_xml(item, rootname=key))
 
                 else:
                     etree.SubElement(root, key).text = str(item)
@@ -93,7 +93,7 @@ class Cydia(Generic):
     XML_ELEMENTS = {"id": "Package", "name": "Name", "version": "Version"}
 
     # template
-    XML_DICT = {
+    XML_DICT: dict = {
         "id": "",
         "name": "",
         "version": "",
@@ -140,6 +140,7 @@ class Cydia(Generic):
 
             if not dep.startswith("firmware"):
                 continue
+
             _, operator, version = RE_DEPENDS.findall(dep)[0]
 
             # FIXME: No way to specify strictly less/more than for iOS version number
@@ -162,14 +163,14 @@ class Cydia(Generic):
                 )
 
         return etree.tostring(
-            dict_to_xml(self.XML_DICT, root="package"), encoding="unicode"
+            dict_to_xml(self.XML_DICT, rootname="package"), encoding="unicode"
         )
 
 
 class Sileo(Generic):
     # dictionary for sileo views
     # each view is an item in the 'views' list.
-    SILEO_DICT = {
+    SILEO_DICT: dict = {
         "minVersion": "0.1",
         "headerImage": "headerImage",
         "class": "DepictionTabView",
