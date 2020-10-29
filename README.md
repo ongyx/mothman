@@ -1,15 +1,23 @@
-# cidercellar
+# mothman
 
-![logo](https://raw.githubusercontent.com/ongyx/cidercellar/master/logo.png "cidercellar")
+![logo](https://raw.githubusercontent.com/ongyx/mothman/master/logo.png "mothman")
+
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/mothman)](https://pypi.org/project/mothman)
+![PyPI - License](https://img.shields.io/pypi/l/mothman)
+![PyPI](https://img.shields.io/pypi/v/mothman)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mothman)
+![Lines of code](https://img.shields.io/tokei/lines/github/ongyx/mothman)
 
 Cydia/Sileo repository creation made ez.
+Inspired by [repoman](https://github.com/JeremyGrosser/repoman).
 
 **NOTE**: This project is **still** WIP and in alpha stage.
 
 ## Why?
 [repo.me](https://github.com/syns/repo.me), a modern Cydia repository template is awesome, and it really simplifies getting a repo up and running.
 But it becomes tedious to manually create descriptions for every single package(which is actually done twice, for both Cydia and Sileo).
-Therefore, this project aims to automate the process of generating descriptions for all packages in a repo, as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
+This project aims to automate the process of generating descriptions for all packages in a repo, as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
 
 ## Features
 - Pure-Python dependencies, portable (no more wrangling with `libapt.so` on non-Debian platforms)
@@ -21,7 +29,7 @@ Therefore, this project aims to automate the process of generating descriptions 
 $ mkdir example && mkdir example/debs
 $ cd example
 # add your packages to debs folder
-$ python -m cidercellar.scan -m debs
+$ python -m mothman.scan -m debs
 ```
 
 ## Depends
@@ -32,7 +40,7 @@ $ python -m cidercellar.scan -m debs
 ## Install
 
 ```
-python(3) -m pip install cidercellar
+python(3) -m pip install mothman
 ```
 
 ## Build

@@ -44,7 +44,7 @@ def dict_to_xml(data: dict, root: str = "root") -> etree.Element:
     return root
 
 
-class GenericDepiction:
+class Generic:
     """A generic depiction.
     To create new representations, subclass this and override the .build() method,
     which should output the depiction representation as a string.
@@ -81,7 +81,7 @@ class GenericDepiction:
         raise NotImplementedError
 
 
-class CydiaDepiction(GenericDepiction):
+class Cydia(Generic):
     """A Cydia depiction.
 
     See GenericDepiction for args.
@@ -166,7 +166,7 @@ class CydiaDepiction(GenericDepiction):
         )
 
 
-class SileoDepiction(GenericDepiction):
+class Sileo(Generic):
     # dictionary for sileo views
     # each view is an item in the 'views' list.
     SILEO_DICT = {

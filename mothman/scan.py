@@ -171,7 +171,7 @@ class DebianTree:
     def __init__(
         self,
         root: Path,
-        deb_path: Path,
+        deb_path: Path = "debs",
         debtype: str = "deb",
         arch: str = None,
         allow_multiversion: bool = True,

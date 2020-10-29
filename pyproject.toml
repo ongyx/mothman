@@ -3,10 +3,10 @@ requires = ["flit_core >=2,<4"]
 build-backend = "flit_core.buildapi"
 
 [tool.flit.metadata]
-module = "cidercellar"
+module = "mothman"
 author = "Ong Yong Xin"
 author-email = "ongyongxin2020+github@gmail.com"
-home-page = "https://github.com/ongyx/cidercellar"
+home-page = "https://github.com/ongyx/mothman"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
