@@ -1,6 +1,6 @@
 # mothman (formerly cidercellar)
 
-[![logo]((https://raw.githubusercontent.com/ongyx/mothman/master/logo.png "mothman")](https://youtube.com/watch?v=nYq46c59n8Q "mothman")
+[![logo](https://raw.githubusercontent.com/ongyx/mothman/master/logo.png "mothman")](https://youtube.com/watch?v=nYq46c59n8Q "mothman")
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/mothman)](https://pypi.org/project/mothman)
