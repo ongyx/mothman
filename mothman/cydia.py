@@ -15,7 +15,7 @@ from . import depictions, scan
 
 __all__ = ["Repository"]
 
-_log = logging.getLogger(__name__)
+_log = logging.getLogger("mothman")
 
 # config for repo templates (paths to depictions, etc.)
 TEMPLATES = {

@@ -18,7 +18,7 @@ from .__version__ import __version__ as ccver
 
 __all__ = ["CAT", "GZIP", "BZIP2", "XZ", "DebianTree"]
 
-_log = logging.getLogger(__name__)
+_log = logging.getLogger("mothman")
 
 # Type hints
 Path = Union[str, pathlib.Path]
