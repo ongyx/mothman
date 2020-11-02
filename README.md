@@ -9,6 +9,8 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mothman)
 ![Lines of code](https://img.shields.io/tokei/lines/github/ongyx/mothman)
 
+[logo here](http://pixelartmaker.com/art/c16b3ffba7b238f)
+
 Cydia/Sileo repository creation made ez.
 Inspired by [repoman](https://github.com/JeremyGrosser/repoman).
 
