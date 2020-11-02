@@ -29,7 +29,7 @@ This project aims to automate the process of generating descriptions for all pac
 ## Usage (WIP)
 
 ```bash
-$ mkdir example && mkdir example/debs
+$ mothman init example
 $ cd example
 # add your packages to debs folder
 $ mothman build

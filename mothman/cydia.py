@@ -6,7 +6,6 @@ If you want a 'classical' Debian repository, see mothman.scan.DebianTree.
 import email
 import email.message
 import logging
-import pathlib
 import re
 import textwrap
 from typing import Generator
@@ -43,7 +42,7 @@ TEMPLATES = {
             "assets/repo/Banners/*",
             "assets/repo/Screenshots/*",
             "sileo-featured.json",
-        ]
+        ],
     },
     "Reposi3": {
         "github": "supermamon/Reposi3",
@@ -57,7 +56,7 @@ TEMPLATES = {
             "debs/com.supermamon.*",
             "depictions/com.supermamon.*",
             "Packages*",
-        ]
+        ],
     },
 }
 

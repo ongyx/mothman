@@ -2,11 +2,8 @@
 """Generate Cydia/Sileo depictions (from deb packages) for Debian repos.
 """
 
-import collections
 import json
-import pathlib
 import re
-import sys
 from datetime import datetime
 from xml.etree import ElementTree as etree
 

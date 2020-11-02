@@ -20,6 +20,9 @@ requires = [
 ]
 requires-python = ">=3.6"
 
+[tool.flit.scripts]
+mothman = "mothman.cli:cli"
+
 [tool.flit.metadata.requires-extra]
 dsc = [
     "PGPy>=0.4.1",
