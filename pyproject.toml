@@ -9,7 +9,7 @@ author-email = "ongyongxin2020+github@gmail.com"
 home-page = "https://github.com/ongyx/mothman"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 description-file = "README.md"
