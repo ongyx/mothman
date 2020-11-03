@@ -14,7 +14,6 @@ from types import ModuleType
 from typing import Dict, Generator, Union
 
 from . import pydpkg
-from .__version__ import __version__ as ccver
 
 __all__ = ["CAT", "GZIP", "BZIP2", "XZ", "DebianTree"]
 
@@ -194,6 +193,10 @@ class DebianTree:
                 # erase existing hashes of Packages file, will be added back in on build
                 del self._release[hash]
 
+        # remove any Packages files
+        for file in self.root.glob("Packages"):
+            file.unlink()
+
         self._debtype = debtype
         self._arch = arch
         self._multiversion = allow_multiversion
@@ -269,7 +272,8 @@ class DebianTree:
 
         Args:
             compress_using: Formats to compress the Packages file in.
-                Format must be one of the module-level constants CAT, GZIP, BZIP2, or XZ.
+                Format must be one of the module-level constants CAT, GZIP,
+                BZIP2, or XZ.
                 Defaults to [CAT, GZIP] (plaintext and .gz compression).
 
         Returns:
@@ -324,68 +328,54 @@ class DebianTree:
 
 
 if __name__ == "__main__":
-    import argparse
+    import click
 
-    parser = argparse.ArgumentParser(
-        prog="dpkg-scanpackages", description="dpkg-scanpackages, in Python."
-    )
-
-    parser.add_argument(
+    @click.command()
+    @click.option(
         "-t",
         "--type",
         help="Scan for *.type packages, instead of *.deb.",
-        action="store",
         default="deb",
     )
-
-    parser.add_argument(
+    @click.option(
         "-a",
         "--arch",
-        help="Use a pattern consisting of *_all.deb and *_arch.deb instead of scanning for all debs.",
-        action="store",
+        help=(
+            "Use a pattern consisting of *_all.deb and *_arch.deb instead of"
+            " scanning for all debs."
+        ),
     )
-
-    parser.add_argument(
+    @click.option(
         "-m",
         "--multiversion",
         help="Include all found packages in the output.",
-        action="store_true",
+        is_flag=True,
     )
-
-    parser.add_argument(
+    @click.option(
         "-c",
         "--compress",
-        help="Formats to compress the Packages file in (cat = no compression). Defaults to 'cat, gz'.",
-        nargs="+",
-        choices=("cat", "gz", "bz2", "xz"),
-        action="store",
+        help=(
+            "Formats to compress the Packages file in (cat = no compression)."
+            " Defaults to 'cat, gz'."
+        ),
+        multiple=True,
+        type=click.Choice(["cat", "gz", "bz2", "xz"]),
         default=["cat", "gz"],
     )
+    @click.argument("binary_path")
+    def main(type, arch, multiversion, compress, binary_path):
+        """Scan for debian packages in binary_path, like dpkg-scanpackages."""
+        tree = DebianTree(
+            ".",
+            binary_path,
+            debtype=type,
+            arch=arch,
+            allow_multiversion=multiversion,
+        )
 
-    parser.add_argument(
-        "-V",
-        "--version",
-        help="Show the version and exit.",
-        action="version",
-        version=ccver,
-    )
+        tree.find_debs()
+        compressions = [f".{c}" if c != "cat" else "" for c in compress]
 
-    parser.add_argument(
-        "binary_path",
-        help="The folder where the binary packages are stored, relative to the current directory",
-        action="store",
-    )
+        tree.build(compress_using=compressions)
 
-    args = parser.parse_args(sys.argv[1:])
-    tree = DebianTree(
-        ".",
-        args.binary_path,
-        debtype=args.type,
-        arch=args.arch,
-        allow_multiversion=args.multiversion,
-    )
-
-    tree.find_debs()
-    compressions = [f".{c}" if c != "cat" else "" for c in args.compress]
-
-    tree.build(compress_using=compressions)
+    main()

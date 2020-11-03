@@ -50,8 +50,8 @@ class Generic:
 
     Args:
         control: The Debian control headers as a dictionary.
-        other_info: A dictionary of package info that does not appear in the control file.
-            The dictionary should be in this format:
+        other_info: A dictionary of package info that does not appear in the
+            control file. The dictionary should be in this format:
             {
                 "price": "Free",  # price of package
                 "header_image": "..."  # direct url to a banner
@@ -61,7 +61,8 @@ class Generic:
                     ...
                 ]
             }
-            where price is the price, header_image is the direct url to a image to use as a banner, and screenshots is a list of URLs to images.
+            where price is the price, header_image is the direct url to a image
+            to use as a banner, and screenshots is a list of URLs to images.
             (Price and header_image is used only by Sileo.)
             This is optional.
 

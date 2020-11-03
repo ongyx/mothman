@@ -1,10 +1,13 @@
 # coding: utf8
 
+import http.server
 import io
 import json
 import logging
 import pathlib
 import shutil
+import socket
+import socketserver
 import zipfile
 
 import click
@@ -23,6 +26,20 @@ VERBOSITY = (
 _log = logging.getLogger("mothman")
 
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
+# https://stackoverflow.com/a/28950776
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(("10.255.255.255", 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = "127.0.0.1"
+    finally:
+        s.close()
+    return IP
 
 
 @click.group()
@@ -82,14 +99,32 @@ def init(repo_path, template_name):
     _log.info("writing config")
     with (repo_path / cydia.CONFIG_NAME).open("w") as f:
         template["name"] = template_name
-        json.dump(template, f)
+        json.dump(template, f, indent=4)
 
 
-@cli.command()
-@click.argument("path")
-@click.argument("host")
-def build(path, host):
-    """Build a repository at path, using hostname."""
+def _build(host, path):
     tree = cydia.Repository(host, path)
     tree.find_debs()
     tree.build()
+
+
+@cli.command()
+@click.argument("host")
+@click.option("-p", "--path", help="path to the repo", default=".")
+def build(host, path):
+    """Build a repository at path, using hostname."""
+    _build(host, path)
+
+
+@cli.command()
+@click.option("-p", "--port", help="port to serve at", default=8000)
+def demo(port):
+    """Build a repo with the current IP address as the host."""
+    current_ip = get_ip()
+    _build(current_ip, ".")
+
+    with socketserver.TCPServer(
+        ("", port), http.server.SimpleHTTPRequestHandler
+    ) as httpd:
+        _log.info("serving at %s, port %s", current_ip, port)
+        httpd.serve_forever()
