@@ -5,10 +5,11 @@ If you want a 'classical' Debian repository, see mothman.scan.DebianTree.
 
 import email
 import email.message
+import json
 import logging
 import re
 import textwrap
-from typing import Generator
+from typing import Generator, Optional
 
 from . import depictions, scan
 
@@ -16,6 +17,7 @@ __all__ = ["Repository"]
 
 _log = logging.getLogger("mothman")
 
+CONFIG_NAME = "mothman.json"
 # config for repo templates (paths to depictions, etc.)
 TEMPLATES = {
     "repo.me": {
@@ -99,15 +101,21 @@ class Repository(scan.DebianTree):
     Args:
         host: The website host URL, i.e 'username.github.io/repo'.
         *args: Passed to super().__init__.
-        template: Which template to use.
-            Must be 'repo.me' or 'Reposi3'.
-        **kwargs: Passed to super().__init__.
+        template: The repo template as a dict (see TEMPLATES for an example).
+            If None, template will be loaded from mothman.json
+            (in the repo root).
+        **kwargs: Passed to super().__init__.q
     """
 
-    def __init__(self, host: str, *args, template: str = "repo.me", **kwargs):
-        self._template: dict = TEMPLATES[template]
-        kwargs["deb_path"] = self._template["deb_path"]
+    def __init__(self, host: str, *args, template: Optional[dict] = None, **kwargs):
         super().__init__(*args, **kwargs)
+        if template is None:
+            with (self.root / CONFIG_NAME).open() as f:
+                self._template = json.load(f)
+        else:
+            self._template = template
+
+        self.deb_path = self.root / self._template["deb_path"]
 
         self._host = host
         self._depictions = {k: v for k, v in DEPICTIONS.items() if k in self._template}
@@ -120,8 +128,14 @@ class Repository(scan.DebianTree):
                 self._release = _load_conf(f.read())
 
     def _build(self, package: str) -> Generator[email.message.Message, None, None]:
-        for version in super()._build(package):
-            self._build_depiction(version)
+        versions = super()._build(package)
+        latest = next(versions)
+
+        # only build depiction for latest version
+        self._build_depiction(latest)
+        yield latest
+
+        for version in versions:
             yield version
 
     def _build_depiction(self, debinfo: email.message.Message) -> None:

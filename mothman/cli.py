@@ -1,6 +1,7 @@
 # coding: utf8
 
 import io
+import json
 import logging
 import pathlib
 import shutil
@@ -77,6 +78,11 @@ def init(repo_path, template_name):
                 path.unlink()
             elif path.is_dir():
                 shutil.rmtree(path)
+
+    _log.info("writing config")
+    with (repo_path / cydia.CONFIG_NAME).open("w") as f:
+        template["name"] = template_name
+        json.dump(template, f)
 
 
 @cli.command()
