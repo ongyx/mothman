@@ -16,6 +16,7 @@ description-file = "README.md"
 requires = [
     "arpy>=1.1.1",
     "click>=7.1.2",
+    "requests>=2.24.0",
     "six<2.0.0",
 ]
 requires-python = ">=3.6"
