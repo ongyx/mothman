@@ -50,7 +50,6 @@ def get_ip():
 def cli(verbosity):
     """Cydia/Sileo repository manager/configurator."""
     # set up logger
-    logging.basicConfig(format=" %(name)s :: %(levelname)-8s :: %(message)s")
     _log.setLevel(VERBOSITY[verbosity - 1])
 
 
@@ -75,7 +74,7 @@ def init(repo_path, template_name):
     )
 
     if repo_path.is_dir():
-        raise ValueError(f"repo folder {str(repo_path)} already exists")
+        raise ValueError(f"repo folder {repo_path} already exists")
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
         _log.info("extracting zip file")
@@ -121,7 +120,7 @@ def build(host, path):
 def demo(port):
     """Build a repo with the current IP address as the host."""
     current_ip = get_ip()
-    _build(current_ip, ".")
+    _build(f"current_ip:{port}", ".")
 
     with socketserver.TCPServer(
         ("", port), http.server.SimpleHTTPRequestHandler

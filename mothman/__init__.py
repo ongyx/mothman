@@ -3,6 +3,11 @@
 
 import logging
 
+import coloredlogs
+
 from .__version__ import __version__  # noqa: F401
 
-logging.basicConfig(level=logging.DEBUG)
+coloredlogs.install(
+    fmt=" %(name)s :: %(levelname)-8s :: %(message)s",
+    logger=logging.getLogger("mothman"),
+)

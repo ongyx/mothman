@@ -5,6 +5,7 @@
 This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add several
 'improvements' (in chronological order):
 
+- removed logging.basicConfig call (called later in mothman)
 - use dict to update hashes (in Dpkg.fileinfo)
 - make pgpy dependency optional
 - ran black/isort
@@ -17,13 +18,18 @@ from __future__ import absolute_import
 import hashlib
 import io
 import logging
-import lzma
 import os
 import tarfile
 from collections import defaultdict
 from email import message_from_file, message_from_string
 from functools import cmp_to_key
 from gzip import GzipFile
+from typing import Dict
+
+try:
+    import lzma  # some platforms aren't built properly with liblzma support, i.e Libterm, a-shell
+except ImportError:
+    lzma = None  # type: ignore
 
 # pypi imports
 import six
@@ -37,14 +43,6 @@ except ImportError:
     pgpy = None
 
 REQUIRED_HEADERS = ("package", "version", "architecture")
-HASHES = {
-    "md5": hashlib.md5,
-    "sha1": hashlib.sha1,
-    "sha256": hashlib.sha256,
-    "sha512": hashlib.sha512,
-}
-
-logging.basicConfig()
 
 
 class DpkgError(Exception):
@@ -92,16 +90,21 @@ def get_fileinfo(filename, chunksize: int = 128):
     :returns: dict
     """
 
-    hashes = {name: hcls() for name, hcls in HASHES.items()}
+    hashes = {
+        "md5": hashlib.md5(),
+        "sha1": hashlib.sha1(),
+        "sha256": hashlib.sha256(),
+        "sha512": hashlib.sha512(),
+    }
 
     with open(filename, "rb") as dpkg_file:
         for chunk in iter(lambda: dpkg_file.read(chunksize), b""):
             for _, h in hashes.items():
                 h.update(chunk)
 
-    hashes = {name: hobj.hexdigest() for name, hobj in hashes.items()}
-    hashes["filesize"] = os.path.getsize(filename)
-    return hashes
+    digests: Dict[str, str] = {name: hobj.hexdigest() for name, hobj in hashes.items()}
+    digests["filesize"] = os.path.getsize(filename)  # type: ignore
+    return digests
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods

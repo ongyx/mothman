@@ -106,34 +106,6 @@ def extract_packages(dir: Path) -> Union[email.message.Message, None]:
     return None
 
 
-def compute_hash(file: pathlib.Path, bsize: int = 8192) -> dict:
-    """Compute the MD5, SHA1, SHA256 and SHA512 hashes of a file.
-
-    Args:
-        file: The path to the file.
-        bsize: How many bytes to digest at a time. Defaults to 8192 (128 * 64).
-
-    Returns:
-        A dictionary of the MD5, SHA1, SHA256 and SHA512 hashes as strings,
-            mapped to their hashlib names.
-    """
-
-    _log.debug("computing hash for %s", file)
-
-    hashes = {name: hash_class() for name, hash_class in pydpkg.HASHES.items()}
-
-    with open(file, mode="rb") as f:
-        while True:
-            buffer = f.read(bsize)
-            if not buffer:
-                break
-
-            for _, hash in hashes.items():
-                hash.update(buffer)
-
-    return {_actual(k): v.hexdigest() for k, v in hashes.items()}
-
-
 def _compare_versions(v1, v2) -> int:
 
     if v1.count("/") == 1:
@@ -188,7 +160,7 @@ class DebianTree:
             self._release = email.message_from_file(f)
 
         # remove any hashes
-        for hash in pydpkg.HASHES:
+        for hash in ("MD5Sum", "SHA1", "SHA256", "SHA512"):
             if hash in self._release:
                 # erase existing hashes of Packages file, will be added back in on build
                 del self._release[hash]
@@ -281,7 +253,7 @@ class DebianTree:
         """
 
         paragraphs = []
-        hashes = {_actual(h): [""] for h in pydpkg.HASHES}
+        hashes: Dict[str, list] = {}
 
         if not compress_using:
             raise DebError("no compression format(s) specified")
@@ -310,12 +282,18 @@ class DebianTree:
             with compression.open(packages_path, mode="wt") as f:  # type: ignore
                 f.write(packages_text)
 
+            packages_hashes = pydpkg.get_fileinfo(packages_path)
+            packages_size = packages_hashes.pop("filesize")
+
             # add hash of Packages file to Release
-            for name, digest in compute_hash(packages_path).items():
+            for name, digest in packages_hashes.items():
+
+                name = _actual(name)
+                if name not in hashes:
+                    hashes[name] = []
+
                 _log.debug("[%s] adding %s hash to Release", packages_path.name, name)
-                hashes[name].append(
-                    f" {digest} {packages_path.stat().st_size} {packages_path.name}"
-                )
+                hashes[name].append(f" {digest} {packages_size} {packages_path.name}")
 
         for name, digests in hashes.items():
             self._release[name] = "\n".join(digests)
