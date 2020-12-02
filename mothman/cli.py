@@ -11,6 +11,7 @@ import socketserver
 import zipfile
 
 import click
+import coloredlogs
 import requests
 
 from . import cydia
@@ -50,7 +51,11 @@ def get_ip():
 def cli(verbosity):
     """Cydia/Sileo repository manager/configurator."""
     # set up logger
-    _log.setLevel(VERBOSITY[verbosity - 1])
+    coloredlogs.install(
+        fmt=" %(levelname)-8s :: %(message)s",
+        level=VERBOSITY[verbosity - 1],
+        logger=logging.getLogger("mothman"),
+    )
 
 
 @cli.command()
