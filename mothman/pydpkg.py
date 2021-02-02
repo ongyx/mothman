@@ -1,15 +1,11 @@
-# coding: utf8
 """ pydpkg: tools for inspecting dpkg archive files in python
             without any dependency on libapt
 
-This copy of pydpkg was forked by ongyx <https://github.com/ongyx> to add several
-'improvements' (in chronological order):
-
-- removed logging.basicConfig call (called later in mothman)
-- use dict to update hashes (in Dpkg.fileinfo)
-- make pgpy dependency optional
-- ran black/isort
-- abstracted fileinfo property (from Dpkg) to module-level function
+Modifications:
+- commented out logging.basicConfig call
+- made pgpy import optional
+- (mypy) ignore imports for untyped modules imported
+- abstracted filesize property to util function
 """
 
 from __future__ import absolute_import
@@ -18,31 +14,30 @@ from __future__ import absolute_import
 import hashlib
 import io
 import logging
+import lzma
 import os
 import tarfile
-from collections import defaultdict
-from email import message_from_file, message_from_string
-from functools import cmp_to_key
-from gzip import GzipFile
-from typing import Dict
 
-try:
-    import lzma  # some platforms aren't built properly with liblzma support, i.e Libterm, a-shell
-except ImportError:
-    lzma = None  # type: ignore
+from collections import defaultdict
+from gzip import GzipFile
+from email import message_from_string, message_from_file
+from functools import cmp_to_key
 
 # pypi imports
 import six
-from arpy import Archive
 
 try:
-    import pgpy
+    import pgpy  # type: ignore
 except ImportError:
-    # pgpy is not neeeded to parse .deb files
-    # (left out because it has non-pure Python deps).
     pgpy = None
 
+from arpy import Archive  # type: ignore
+
+from mothman.utils import fileinfo
+
 REQUIRED_HEADERS = ("package", "version", "architecture")
+
+# logging.basicConfig()
 
 
 class DpkgError(Exception):
@@ -79,32 +74,6 @@ class DscBadChecksumsError(DscError):
 
 class DscBadSignatureError(DscError):
     """A dsc file has an invalid openpgp signature(s)"""
-
-
-def get_fileinfo(filename, chunksize: int = 128):
-    """Return a dictionary containing md5/sha1/sha256 checksums
-    and the size in bytes of our target file.
-
-    :param filename: string
-    :param chunksize: int
-    :returns: dict
-    """
-
-    hashes = {
-        "md5": hashlib.md5(),
-        "sha1": hashlib.sha1(),
-        "sha256": hashlib.sha256(),
-        "sha512": hashlib.sha512(),
-    }
-
-    with open(filename, "rb") as dpkg_file:
-        for chunk in iter(lambda: dpkg_file.read(chunksize), b""):
-            for _, h in hashes.items():
-                h.update(chunk)
-
-    digests: Dict[str, str] = {name: hobj.hexdigest() for name, hobj in hashes.items()}
-    digests["filesize"] = os.path.getsize(filename)  # type: ignore
-    return digests
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -209,7 +178,7 @@ class Dpkg:
         :returns: dict
         """
         if self._fileinfo is None:
-            self._fileinfo = get_fileinfo(self.filename)
+            self._fileinfo = fileinfo(self.filename)
         return self._fileinfo
 
     @property
@@ -235,14 +204,6 @@ class Dpkg:
         :returns: string
         """
         return self.fileinfo["sha256"]
-
-    @property
-    def sha512(self):
-        """Return the sha512 hash of our target file
-
-        :returns: string
-        """
-        return self.fileinfo["sha512"]
 
     @property
     def filesize(self):
@@ -281,6 +242,14 @@ class Dpkg:
         if self._debian_revision is None:
             self._debian_revision = self.split_full_version(self.version)[2]
         return self._debian_revision
+
+    @property
+    def debian_name(self):
+        """Return the debian name used for a package's filename.
+
+        :returns: string
+        """
+        return "_".join(self[field] for field in REQUIRED_HEADERS)
 
     def get(self, item, default=None):
         """Return an object property, a message header, None or the caller-
@@ -460,8 +429,8 @@ class Dpkg:
         """Split a revision string into a list of alternating between strings and
         numbers, padded on either end to always be "str, int, str, int..." and
         always be of even length.  This allows us to trivially implement the
-        comparison algorithm described at
-        http://debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version
+        comparison algorithm described at section 5.6.12 in:
+        https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
         """
         result = []
         while revision_str:
@@ -518,8 +487,9 @@ class Dpkg:
     @staticmethod
     def compare_revision_strings(rev1, rev2):
         """Compare two debian revision strings as described at
-        https://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Version
+        https://www.debian.org/doc/debian-policy/ch-controlfields.html#version
         """
+        # TODO(memory): this function now fails pylint R0912 too-many-branches
         if rev1 == rev2:
             return 0
         # listify pads results so that we will always be comparing ints to ints
@@ -530,6 +500,9 @@ class Dpkg:
             return 0
         try:
             for i, item in enumerate(list1):
+                # explicitly raise IndexError if we've fallen off the edge of list2
+                if i >= len(list2):
+                    raise IndexError
                 # just in case
                 if not isinstance(item, list2[i].__class__):
                     raise DpkgVersionError(
@@ -550,8 +523,14 @@ class Dpkg:
                     return Dpkg.dstringcmp(item, list2[i])
         except IndexError:
             # rev1 is longer than rev2 but otherwise equal, hence greater
+            # ...except for goddamn tildes
+            if list1[len(list2)][0][0] == "~":
+                return -1
             return 1
         # rev1 is shorter than rev2 but otherwise equal, hence lesser
+        # ...except for goddamn tildes
+        if list2[len(list1)][0][0] == "~":
+            return 1
         return -1
 
     @staticmethod

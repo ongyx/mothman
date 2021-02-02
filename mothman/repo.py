@@ -1,6 +1,6 @@
 # coding: utf8
 """Cydia/Sileo repository stuff.
-If you want a 'classical' Debian repository, see mothman.scan.DebianTree.
+If you want a 'classical' Debian repository, see mothman.tree.DebianTree.
 """
 
 import email
@@ -8,10 +8,9 @@ import email.message
 import json
 import logging
 import re
-import textwrap
 from typing import Generator, Optional
 
-from . import depictions, scan
+from mothman import depictions, tree
 
 __all__ = ["Repository"]
 
@@ -19,6 +18,7 @@ _log = logging.getLogger("mothman")
 
 CONFIG_NAME = "mothman.json"
 # config for repo templates (paths to depictions, etc.)
+# all urls are relative to the root.
 TEMPLATES = {
     "repo.me": {
         "github": "syns/repo.me",
@@ -34,7 +34,7 @@ TEMPLATES = {
         "deb_path": "debians",
         # apt config (if any)
         "apt.conf": "assets/repo/repo.conf",
-        # files/folders that should not be here
+        # files/folders that are not needed
         "exclude": [
             "Packages*",
             "debians/me.syns.sample.deb",
@@ -58,6 +58,7 @@ TEMPLATES = {
             "debs/com.supermamon.*",
             "depictions/com.supermamon.*",
             "Packages*",
+            "Release",
         ],
     },
 }
@@ -68,34 +69,7 @@ DEPICTIONS = {"Depiction": depictions.Cydia, "SileoDepiction": depictions.Sileo}
 RE_DECL = re.compile(r"^\s*([a-zA-Z]+) (\".+\"|.+);$", re.MULTILINE)
 
 
-def _load_conf(conf: str) -> email.message.Message:
-    msg = email.message.Message()
-
-    for k, v in RE_DECL.findall(conf):
-        if v.startswith('"') and v.endswith('"'):
-            v = v[1:-1]
-        msg[k] = v
-
-    return msg
-
-
-def _dump_conf(conf: email.message.Message) -> str:
-    return (
-        textwrap.dedent(
-            """APT {
-        FTPArchive {
-        Release {
-        %s
-        };
-        };
-        };
-        """
-        )
-        % "\n".join(f'{k} "{v}";' if " " in v else f"{k} {v};" for k, v in conf.items())
-    )
-
-
-class Repository(scan.DebianTree):
+class Repository(tree.DebianTree):
     """A Cydia/Sileo repository.
 
     Args:
@@ -104,7 +78,7 @@ class Repository(scan.DebianTree):
         template: The repo template as a dict (see TEMPLATES for an example).
             If None, template will be loaded from mothman.json
             (in the repo root).
-        **kwargs: Passed to super().__init__.q
+        **kwargs: Passed to super().__init__
     """
 
     def __init__(self, host: str, *args, template: Optional[dict] = None, **kwargs):
@@ -119,13 +93,6 @@ class Repository(scan.DebianTree):
 
         self._host = host
         self._depictions = {k: v for k, v in DEPICTIONS.items() if k in self._template}
-
-        # load apt.conf (if any)
-        conf = self._template.get("apt.conf")
-
-        if conf is not None:
-            with open(self.root / conf) as f:  # type: ignore
-                self._release = _load_conf(f.read())
 
     def _build(self, package: str) -> Generator[email.message.Message, None, None]:
         versions = super()._build(package)
@@ -145,7 +112,7 @@ class Repository(scan.DebianTree):
                 package=debinfo["Package"]
             )
 
-            # make parent directories, if ti does not exist yet
+            # make parent directories, if it does not exist yet
             (dep_path.parent).mkdir(parents=True, exist_ok=True)
 
             # write actual depiction

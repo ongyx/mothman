@@ -5,119 +5,25 @@ Forked from 'https://github.com/supermamon/dpkg-scanpackages.py'.
 
 import email
 import email.message
-import functools
-import importlib
 import logging
 import pathlib
-import sys
-from types import ModuleType
-from typing import Dict, Generator, Union
+from collections import defaultdict
+from typing import Dict, Generator
 
-from . import pydpkg
+from mothman import pydpkg, utils
+from mothman.utils import BZIP2, CAT, GZIP, XZ, Path
 
 __all__ = ["CAT", "GZIP", "BZIP2", "XZ", "DebianTree"]
 
 _log = logging.getLogger("mothman")
-
-# Type hints
-Path = Union[str, pathlib.Path]
-
-# Known compression methods for Packages file mapped to stdlib modules.
-# These are (problably) the most common compression methods.
-PACKAGES_COMPRESSION = {"": "io", ".gz": "gzip", ".bz2": "bz2", ".xz": "lzma"}
-
-# Convinent constants for compression.
-CAT = ""
-GZIP = ".gz"
-BZIP2 = ".bz2"
-XZ = ".xz"
 
 
 class DebError(Exception):
     pass
 
 
-def _actual(name: str) -> str:
-    name = name.upper()
-    if name == "MD5":
-        name += "Sum"
-    return name
-
-
-def _debname(debinfo: pydpkg.Dpkg) -> str:
-    return "_".join(debinfo[field] for field in ("Package", "Version", "Architecture"))
-
-
-def lazy_import(module_name: str) -> ModuleType:
-    """Import a module (if it has not been imported yet).
-
-    Args:
-        module_name: The module.
-
-    Returns:
-        The module itself.
-    """
-
-    # HACK: much nicer than a long block of elifs
-    # so that we don't have to keep re-importing modules.
-    _log.debug("lazy-importing %s", module_name)
-    module = sys.modules.get(module_name)
-    if module is None:
-        # not imported yet
-        module = importlib.import_module(module_name)
-
-    return module
-
-
-def extract_packages(dir: Path) -> Union[email.message.Message, None]:
-    """Get the Packages file from a directory.
-    This searches for the Packages file with different extensions in the directory
-    (Packages.bz2, Packages.gz, et al.), extracts and returns the first one it finds.
-    If not, it will fallback to just getting the normal Packages file
-    (no compression).
-
-    Args:
-        dir: The path to the folder containing the Packages file.
-
-    Raises:
-        FileNotFoundError, if the Packages file could not be gotten.
-
-    Returns:
-        The Packages file as a Message object.
-    """
-
-    file = pathlib.Path(dir) / "Packages"
-
-    for ext, module_name in PACKAGES_COMPRESSION.items():
-
-        compressor = lazy_import(module_name)
-
-        actual_file = file.with_suffix(ext)
-        if not actual_file.exists():
-            continue
-
-        _log.debug("decompressing %s", actual_file)
-        with compressor.open(str(actual_file), mode="rt") as f:  # type: ignore
-            # we'll just return the first one that exists
-            _log.debug("parsing %s", actual_file)
-            return email.message_from_file(f)
-
-    # compression not supported
-    return None
-
-
-def _compare_versions(v1, v2) -> int:
-
-    if v1.count("/") == 1:
-        v1 = v1.partition("/")[0]
-
-    if v2.count("/") == 1:
-        v2 = v2.partition("/")[0]
-
-    return pydpkg.Dpkg.compare_versions(v1, v2)
-
-
-_compare_versions_key = functools.cmp_to_key(_compare_versions)
+def _sort(versions):
+    return sorted(list(versions), key=pydpkg.Dpkg.compare_versions_key)
 
 
 class DebianTree:
@@ -172,7 +78,7 @@ class DebianTree:
         self._debtype = debtype
         self._arch = arch
         self._multiversion = allow_multiversion
-        self._tree: Dict[str, dict] = {}
+        self._tree: Dict[str, Dict[str, dict]] = defaultdict(lambda: defaultdict(dict))
         self._found_debs = False
 
     @property
@@ -181,14 +87,9 @@ class DebianTree:
 
     def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
         _log.debug("[%s] adding deb", debinfo.Package)
-        name, version, arch = [
-            debinfo[f] for f in ("Package", "Version", "Architecture")
-        ]
+        name, version, arch = [debinfo[f] for f in pydpkg.REQUIRED_HEADERS]
 
-        if name not in self._tree:
-            self._tree[name] = {}
-
-        self._tree[name][f"{version}/{arch}"] = debinfo
+        self._tree[name][version][arch] = debinfo
 
     def find_debs(self) -> None:
         """Find all Debian package files in .deb_path, and add them to the tree.
@@ -213,7 +114,7 @@ class DebianTree:
         # simpler than changing the quicksort function itself
         _log.debug("[%s] sorting versions", package)
         versions = self._tree[package]
-        version_names = sorted(list(versions), key=_compare_versions_key)
+        version_names = _sort(versions)
         version_names.reverse()
 
         if not self._multiversion:
@@ -224,20 +125,22 @@ class DebianTree:
             version_names = [v for v in version_names if v.startswith(latest_version)]
 
         for v in version_names:
-            debinfo = versions[v]
-            debname = _debname(debinfo)
-            fileinfo = debinfo.fileinfo
-            msg = debinfo.message
+            for _, debinfo in versions[v].items():
+                debname = debinfo.debian_name
+                fileinfo = debinfo.fileinfo
+                msg = debinfo.message
 
-            _log.info("[%s] adding to Packages", debname)
+                _log.info("[%s] adding to Packages", debname)
 
-            msg["Filename"] = str(pathlib.Path(debinfo.filename).relative_to(self.root))
-            msg["Size"] = str(fileinfo.pop("filesize"))
-            for name, digest in fileinfo.items():
-                _log.debug("[%s] adding %s hash to Packages", debname, name)
-                msg[_actual(name)] = digest
+                msg["Filename"] = str(
+                    pathlib.Path(debinfo.filename).relative_to(self.root)
+                )
+                msg["Size"] = str(fileinfo.pop("filesize"))
+                for name, digest in fileinfo.items():
+                    _log.debug("[%s] adding %s hash to Packages", debname, name)
+                    msg[name] = digest
 
-            yield msg
+                yield msg
 
     def build(self, compress_using: list = [CAT, GZIP]) -> str:
         """Build the Packages/Release file for this repo.
@@ -272,9 +175,9 @@ class DebianTree:
         packages_text = "".join(paragraphs)
         packages_path = self.root / "Packages"
 
-        for format in compress_using:
-            compression = lazy_import(PACKAGES_COMPRESSION[format])
-            packages_path = packages_path.with_suffix(format)
+        for fmt in compress_using:
+            compression = utils._lazy_import_compression(fmt)
+            packages_path = packages_path.with_suffix(fmt)
 
             _log.info(
                 "[%s] compressing using %s", packages_path.name, compression.__name__
@@ -282,13 +185,12 @@ class DebianTree:
             with compression.open(packages_path, mode="wt") as f:  # type: ignore
                 f.write(packages_text)
 
-            packages_hashes = pydpkg.get_fileinfo(packages_path)
+            packages_hashes = utils.fileinfo(packages_path)
             packages_size = packages_hashes.pop("filesize")
 
             # add hash of Packages file to Release
             for name, digest in packages_hashes.items():
 
-                name = _actual(name)
                 if name not in hashes:
                     hashes[name] = []
 

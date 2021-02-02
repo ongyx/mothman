@@ -1,5 +1,7 @@
 # coding: utf8
 
+import email.message
+import functools
 import http.server
 import io
 import json
@@ -8,14 +10,17 @@ import pathlib
 import shutil
 import socket
 import socketserver
+import tempfile
 import zipfile
 
 import click
-import coloredlogs
+import coloredlogs  # type: ignore
 import requests
 
-from . import cydia
+from mothman import repo, utils
 from .__version__ import __version__
+
+click.option = functools.partial(click.option, show_default=True)  # type: ignore
 
 VERBOSITY = (
     logging.CRITICAL,
@@ -27,6 +32,35 @@ VERBOSITY = (
 _log = logging.getLogger("mothman")
 
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+# used to prompt for creating a new Release file.
+RELEASE_PROMPT = {
+    "Origin": ("name of this repo", None),
+    "Label": ("nickname of this repo", None),
+    "Suite": ("the repo's stability", "stable"),
+    "Version": ("version", "1.0.0"),
+    "Codename": ("what system to target (ignore if only targeting iOS)", "tangelo"),
+    "Architectures": ("what arch to target (ditto)", "iphoneos-arm"),
+    "Components": ("the repo's components", "main"),
+    "Description": ("gist of what your repo is for", ""),
+}
+
+
+def release_prompt():
+    release = {}
+    for field, (help_msg, default) in RELEASE_PROMPT.items():
+        while True:
+            value = input(f"{field} - {help_msg} [{default}]: ")
+            if not value:
+                if default is None:
+                    click.echo("Field is required, try again.")
+                    continue
+                else:
+                    value = default
+
+            release[field] = value
+            break
+    return release
 
 
 # https://stackoverflow.com/a/28950776
@@ -59,37 +93,47 @@ def cli(verbosity):
 
 
 @cli.command()
-@click.argument("repo_path")
+@click.option(
+    "-p",
+    "--path",
+    "repo_path",
+    help="path to the repo",
+    default=".",
+)
 @click.option(
     "-t",
     "--template",
     "template_name",
-    help=f"Name of the template to use ({', '.join(t for t in cydia.TEMPLATES)})",
+    help=f"name of the template to use ({', '.join(t for t in repo.TEMPLATES)})",
     default="repo.me",
 )
 def init(repo_path, template_name):
     """Initalise a repository at path."""
     repo_path = pathlib.Path(repo_path)
-    template = cydia.TEMPLATES[template_name]
+
+    template = repo.TEMPLATES[template_name]
+
     username, reponame = template["github"].split("/")
+
     _log.info("downloading template %s/%s", username, reponame)
+
     response = requests.get(
         f"https://github.com/{username}/{reponame}/archive/master.zip",
         allow_redirects=True,
     )
 
-    if repo_path.is_dir():
-        raise ValueError(f"repo folder {repo_path} already exists")
+    repo_path.mkdir(exist_ok=True)
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-        _log.info("extracting zip file")
-        folder = f"{reponame}-master"
-        for file in zf.namelist():
-            if file.startswith(folder):
-                _log.debug("extracting %s", file)
-                zf.extract(file, repo_path.parent)
 
-        (repo_path.parent / folder).rename(repo_path)  # rename to actual name
+        _log.info("extracting zip file")
+        template_root = f"{reponame}-master"
+
+        for zinfo in zf.infolist():
+            _log.debug("extracting %s", zinfo.filename)
+            zinfo.filename = zinfo.filename.replace(template_root, "")
+
+            zf.extract(zinfo, str(repo_path))
 
     # remove unecessary files
     for pattern in template["exclude"]:
@@ -100,14 +144,32 @@ def init(repo_path, template_name):
             elif path.is_dir():
                 shutil.rmtree(path)
 
+    existing_release = (repo_path / "Release").is_file()
+
+    if existing_release:
+        answer = click.confirm(
+            f"A Release file in this repo already exists. Do you want to create a new one? [y/n]: "
+        )
+    else:
+        answer = True  # always create a new release if it does not exist
+
+    if answer:
+        release = release_prompt()
+        msg = email.message.Message()
+        for key, value in release.items():
+            msg[key] = value
+
+        with (repo_path / "Release").open("w") as f:
+            f.write(str(msg))
+
     _log.info("writing config")
-    with (repo_path / cydia.CONFIG_NAME).open("w") as f:
+    with (repo_path / repo.CONFIG_NAME).open("w") as f:
         template["name"] = template_name
         json.dump(template, f, indent=4)
 
 
 def _build(host, path):
-    tree = cydia.Repository(host, path)
+    tree = repo.Repository(host, path)
     tree.find_debs()
     tree.build()
 
@@ -124,7 +186,7 @@ def build(host, path):
 @click.option("-p", "--port", help="port to serve at", default=8000)
 def demo(port):
     """Build a repo with the current IP address as the host."""
-    current_ip = get_ip()
+    current_ip = "0.0.0.0"
     _build(f"current_ip:{port}", ".")
 
     with socketserver.TCPServer(
