@@ -79,8 +79,8 @@ class Generic:
         raise NotImplementedError
 
 
-class Cydia(Generic):
-    """A Cydia depiction.
+class CydiaXML(Generic):
+    """A Cydia depiction as XML.
 
     See GenericDepiction for args.
     """

@@ -22,6 +22,10 @@ Inspired by [repoman](https://github.com/JeremyGrosser/repoman).
 But it becomes tedious to manually create descriptions for every single package (which is actually done twice, for both Cydia and Sileo).
 This project aims to automate the process of generating descriptions for all packages in a repo, as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
 
+## Hey, what about [Silica](https://github.com/Shugabuga/Silica)?
+
+The main advantage of mothman is that it is entirely pure-Python. Silica shells out to dpkg-deb (Debian-based systems, WSL). So you can use mothman on *both* WSL and native Windows.
+
 ## Features
 
 - Pure-Python dependencies, portable (no more wrangling with `libapt.so` on non-Debian platforms)
@@ -31,7 +35,7 @@ This project aims to automate the process of generating descriptions for all pac
 ## Usage (WIP)
 
 ```bash
-$ mothman init example
+$ mothman init example  # or 'mothman init .' in an existing folder
 $ cd example
 # add your packages to debs folder
 $ mothman build

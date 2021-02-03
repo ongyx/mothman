@@ -23,10 +23,12 @@ TEMPLATES = {
     "repo.me": {
         "github": "syns/repo.me",
         "Depiction": {
+            "class": "CydiaXML",  # specifies which class is used in mothman.depictions to make depiction
             "path": "depictions/web/{package}/info.xml",
             "url": "{host}/depictions/web/?p={package}",
         },
         "SileoDepiction": {
+            "class": "Sileo",  # Sileo only has one representation.
             "path": "depictions/native/{package}/depiction.json",
             "url": "{host}/depictions/native/{package}/depiction.json",
         },
@@ -49,6 +51,7 @@ TEMPLATES = {
     "Reposi3": {
         "github": "supermamon/Reposi3",
         "Depiction": {
+            "class": "CydiaXML",
             "path": "depictions/{package}/info.xml",
             "url": "{host}/depictions/?p={package}",
         },
@@ -62,8 +65,6 @@ TEMPLATES = {
         ],
     },
 }
-
-DEPICTIONS = {"Depiction": depictions.Cydia, "SileoDepiction": depictions.Sileo}
 
 # for parsing repo.conf (in the syns/repo.me repo template).
 RE_DECL = re.compile(r"^\s*([a-zA-Z]+) (\".+\"|.+);$", re.MULTILINE)
@@ -92,7 +93,11 @@ class Repository(tree.DebianTree):
         self.deb_path = self.root / self._template["deb_path"]
 
         self._host = host
-        self._depictions = {k: v for k, v in DEPICTIONS.items() if k in self._template}
+        self._depictions = {
+            k: self._template[k]["class"]
+            for k in ("Depiction", "SileoDepiction")
+            if k in self._template
+        }
 
     def _build(self, package: str) -> Generator[email.message.Message, None, None]:
         versions = super()._build(package)
@@ -106,8 +111,11 @@ class Repository(tree.DebianTree):
             yield version
 
     def _build_depiction(self, debinfo: email.message.Message) -> None:
-        for dep, dep_class in self._depictions.items():
+        for dep, _dep_class in self._depictions.items():
             _log.debug("[%s] making %s depiction", debinfo["Package"], dep)
+
+            dep_class = getattr(depictions, _dep_class)
+
             dep_path = self.root / self._template[dep]["path"].format(
                 package=debinfo["Package"]
             )
