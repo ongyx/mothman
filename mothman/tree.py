@@ -8,7 +8,7 @@ import email.message
 import logging
 import pathlib
 from collections import defaultdict
-from typing import Dict, Generator
+from typing import Dict, Generator, Optional
 
 from mothman import pydpkg, utils
 from mothman.utils import BZIP2, CAT, GZIP, XZ, Path
@@ -31,9 +31,7 @@ class DebianTree:
 
     Args:
         root: The path to the repository.
-        deb_path: The relative path to the directory containing
-            the Debian package files.
-        deb_type: The type of the packages to scan for. Defaults to 'deb'.
+        debtype: The type of the packages to scan for. Defaults to 'deb'.
         arch: The architecture of the packages to scan for. If None, all
             package architectures will be allowed. Defaults to None.
         allow_multiversion: Whether or not to allow multiple versions of
@@ -41,24 +39,18 @@ class DebianTree:
 
     Attributes:
         root (pathlib.Path): See Args.
-        deb_path (pathlib.Path): See Args.
         root_str (str): .path, as a string.
     """
 
     def __init__(
         self,
         root: Path,
-        deb_path: Path = "debs",
         debtype: str = "deb",
         arch: str = None,
         allow_multiversion: bool = True,
-    ) -> None:
+    ) :
         _log.debug("initalising repo %s", root)
         self.root = pathlib.Path(root).resolve().expanduser()
-        if str(deb_path) == ".":
-            self.deb_path = self.root
-        else:
-            self.deb_path = self.root / deb_path
         self.release_path = self.root / "Release"
 
         with self.release_path.open() as f:
@@ -66,10 +58,10 @@ class DebianTree:
             self._release = email.message_from_file(f)
 
         # remove any hashes
-        for hash in ("MD5Sum", "SHA1", "SHA256", "SHA512"):
-            if hash in self._release:
+        for hash_field in ("MD5Sum", "SHA1", "SHA256", "SHA512"):
+            if hash_field in self._release:
                 # erase existing hashes of Packages file, will be added back in on build
-                del self._release[hash]
+                del self._release[hash_field]
 
         # remove any Packages files
         for file in self.root.glob("Packages"):
@@ -79,35 +71,41 @@ class DebianTree:
         self._arch = arch
         self._multiversion = allow_multiversion
         self._tree: Dict[str, Dict[str, dict]] = defaultdict(lambda: defaultdict(dict))
-        self._found_debs = False
 
     @property
     def root_str(self):
         return str(self.root)
 
-    def _add_deb(self, debinfo: pydpkg.Dpkg) -> None:
+    def add_deb(self, file: pathlib.Path):
+        """Add a Debian package file to the tree.
+
+        Args:
+            file: The path to the package file.
+        """
+
+        debinfo = pydpkg.Dpkg(file)
+
+        # arch check (i use arch btw).
+        if self._arch is not None:
+            if debinfo["Architecture"] != self._arch:
+                return
+
         _log.debug("[%s] adding deb", debinfo.Package)
         name, version, arch = [debinfo[f] for f in pydpkg.REQUIRED_HEADERS]
 
         self._tree[name][version][arch] = debinfo
 
-    def find_debs(self) -> None:
-        """Find all Debian package files in .deb_path, and add them to the tree.
-        This should only be called once, subsequent calls will be ignored."""
-        if self._found_debs:
-            _log.warning(".find_debs() called more than once")
-            return
-        _log.info("finding debs")
+    def add_debs(self, folder: Optional[pathlib.Path] = None) :
+        """Find any Debian package files and add them to the tree.
 
-        for debfile in self.deb_path.glob(f"*.{self._debtype}"):
-            debinfo = pydpkg.Dpkg(debfile)
+        Args:
+            folder: The path to search for packages.
+                No recursive searching is done.
+        """
+        _log.info("[%s] finding debs", folder)
 
-            # arch check (i use arch btw).
-            if self._arch is not None:
-                if debinfo["Architecture"] != self._arch:
-                    continue
-
-            self._add_deb(debinfo)
+        for debfile in folder.glob(f"*.{self._debtype}"):
+            self.add_deb(debfile)
 
     def _build(self, package: str) -> Generator[email.message.Message, None, None]:
         # need to reverse, so latest versions come first
@@ -153,15 +151,19 @@ class DebianTree:
 
         Returns:
             The Packages file content as a string.
+
+        Raises:
+            DebError, if there are no packages added to this repo.
         """
 
         paragraphs = []
         hashes: Dict[str, list] = {}
 
-        if not compress_using:
-            raise DebError("no compression format(s) specified")
-
-        self.find_debs()
+        if not self._tree:
+            raise DebError(
+                "refusing to build without any packages; "
+                "did you forget to add any packages using .add_debs()?"
+            )
 
         # iterate alphabetically
         for package in sorted(self._tree):

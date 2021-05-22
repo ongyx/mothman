@@ -71,7 +71,7 @@ class Generic:
         other_info: See Args.
     """
 
-    def __init__(self, control: dict, other_info: dict = {}) -> None:
+    def __init__(self, control: dict, other_info: dict = {}):
         self.control = control
         self.other_info = other_info
 
@@ -80,7 +80,7 @@ class Generic:
 
 
 class CydiaXML(Generic):
-    """A Cydia depiction as XML.
+    """A Cydia depiction as XML (used in Reposi3 and repo.me).
 
     See GenericDepiction for args.
     """
@@ -112,7 +112,7 @@ class CydiaXML(Generic):
         },
     }
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # add control info to xml
@@ -183,10 +183,10 @@ class Sileo(Generic):
     }
 
     def __init__(self, *args, **kwargs):
-        self._views = []
         super().__init__(*args, **kwargs)
+        self._views = []
 
-    def add_view(self, viewclass: str, properties: dict = {}) -> None:
+    def add_view(self, viewclass: str, properties: dict = {}):
         """Add a subview to the depiction root.
 
         Args:
@@ -197,7 +197,7 @@ class Sileo(Generic):
         properties["class"] = viewclass
         self.SILEO_DICT["tabs"][0]["views"].append(properties)
 
-    def add_spacer(self) -> None:
+    def add_spacer(self):
         """Add a spacer view (to seperate depiction entries)."""
 
         self.add_view("DepictionSpacerView", {"spacing": 8})

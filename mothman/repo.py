@@ -90,7 +90,8 @@ class Repository(tree.DebianTree):
         else:
             self._template = template
 
-        self.deb_path = self.root / self._template["deb_path"]
+        deb_path = self.root / self._template["deb_path"]
+        self.add_debs(deb_path)
 
         self._host = host
         self._depictions = {
@@ -110,7 +111,7 @@ class Repository(tree.DebianTree):
         for version in versions:
             yield version
 
-    def _build_depiction(self, debinfo: email.message.Message) -> None:
+    def _build_depiction(self, debinfo: email.message.Message):
         for dep, _dep_class in self._depictions.items():
             _log.debug("[%s] making %s depiction", debinfo["Package"], dep)
 

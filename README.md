@@ -20,11 +20,14 @@ Inspired by [repoman](https://github.com/JeremyGrosser/repoman).
 
 [repo.me](https://github.com/syns/repo.me) and [Reposi3](https://github.com/supermamon/Reposi3) are awesome Cydia repo templates, simplifying the creation of Cydia repos.
 But it becomes tedious to manually create descriptions for every single package (which is actually done twice, for both Cydia and Sileo).
-This project aims to automate the process of generating descriptions for all packages in a repo, as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
+
+This project aims to automate the process of generating descriptions for all packages in a repo,
+as well as creating the `Packages` and `Release`  file (without `apt`, especially on Windows).
 
 ## Hey, what about [Silica](https://github.com/Shugabuga/Silica)?
 
-The main advantage of mothman is that it is entirely pure-Python. Silica shells out to dpkg-deb (Debian-based systems, WSL). So you can use mothman on *both* WSL and native Windows.
+The main advantage of mothman is that it is entirely pure-Python. Silica shells out to dpkg-deb (Debian-based systems, WSL).
+So you can use mothman on *both* WSL and native Windows.
 
 ## Features
 
@@ -32,14 +35,44 @@ The main advantage of mothman is that it is entirely pure-Python. Silica shells 
 - Automate repository management, including adding Debian packages and generating depictions for them (certain fields can be customised)
 - Adds `Depiction` and `SileoDepiction` keys to `Packages` file for you
 
-## Usage (WIP)
+## CLI Usage
+
+1. Create a new repo from an existing template:
 
 ```bash
-$ mothman init example  # or 'mothman init .' in an existing folder
-$ cd example
-# add your packages to debs folder
-$ mothman build
+$ mothman init -p example && cd example
+# ...some log messages here...
+INFO     :: Done! Place your Debian package files in the example/debians folder,
+            customise the template if needed, and execute 'mothman build <host domain>' to build.
 ```
+
+This will create a `mothman.json` config file in the root of the repository folder.
+The config file is really, *really* important because it tells mothman about the template it's using. Don't delete it!
+
+2. Add your Debian packages/tweaks to the aforementioned folder (in this case `example/debians`).
+
+Optionally, you can change the template design around a bit and customize it to your liking.
+
+3. Build the repo:
+
+```bash
+$ mothman build my-domain.com
+```
+
+where my-domain.com is the website where you are hosting your repo. Make sure it is just the domain **without** `http(s)://` in front.
+
+If you are going to host the repo in a subdirectory (i.e <username>.github.io isn't just for your Cydia repo), then just append the path:
+
+```bash
+$ mothman build <username>.github.io/example  # assuming that you move the 'example' Cydia repo into the Github Pages repository.
+```
+
+Push the changes to your repo or your server.
+If you add/update any packages, just repeat step 3.
+
+## API Usage
+
+If you want to use mothman as a Python module, the reference docs are [here](API.md).
 
 ## Depends
 
@@ -63,7 +96,7 @@ To build, do `flit build`.
 Apache License v2.
 
 ```text
-Copyright 2020 Ong Yong Xin
+Copyright 2020-2021 Ong Yong Xin
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

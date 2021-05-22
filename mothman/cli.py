@@ -10,14 +10,13 @@ import pathlib
 import shutil
 import socket
 import socketserver
-import tempfile
 import zipfile
 
 import click
 import coloredlogs  # type: ignore
 import requests
 
-from mothman import repo, utils
+from mothman import repo
 from .__version__ import __version__
 
 click.option = functools.partial(click.option, show_default=True)  # type: ignore
@@ -148,7 +147,7 @@ def init(repo_path, template_name):
 
     if existing_release:
         answer = click.confirm(
-            f"A Release file in this repo already exists. Do you want to create a new one? [y/n]: "
+            "A Release file in this repo already exists. Do you want to create a new one? [y/n]: "
         )
     else:
         answer = True  # always create a new release if it does not exist
@@ -167,10 +166,14 @@ def init(repo_path, template_name):
         template["name"] = template_name
         json.dump(template, f, indent=4)
 
+    _log.info(
+        f"Done! Place your Debian package files in the {repo_path}/{template['deb_path']} folder,\n"
+        "customise the template if needed, and execute 'mothman build <host domain>' to build."
+    )
+
 
 def _build(host, path):
     tree = repo.Repository(host, path)
-    tree.find_debs()
     tree.build()
 
 
